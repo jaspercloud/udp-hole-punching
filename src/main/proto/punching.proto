@@ -1,0 +1,29 @@
+syntax = "proto2";
+option java_package = "org.jaspercloud.punching.proto";
+option java_outer_classname = "PunchingProtos";
+
+enum MsgType {
+  ReqRegisterType = 1;
+  RespRegisterType = 2;
+  PingType = 3;
+  PongType = 4;
+  PunchingType = 5;
+}
+
+message PunchingMessage {
+  required MsgType type = 1;
+  required string reqId = 2;
+  optional bytes data = 3;
+}
+
+message ConnectionData {
+  required string host = 1;
+  required int32 port = 2;
+}
+
+message PunchingData {
+  required string pingHost = 1;
+  required int32 pingPort = 2;
+  required string pongHost = 3;
+  required int32 pongPort = 4;
+}
