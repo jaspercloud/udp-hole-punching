@@ -5,6 +5,7 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import org.jaspercloud.punching.proto.PunchingProtos;
 import org.springframework.beans.factory.InitializingBean;
 
 import java.net.InetSocketAddress;
@@ -17,6 +18,7 @@ public class PunchingClient implements InitializingBean {
     private int localPort;
     private Channel channel;
     private ConnectionManager connectionManager;
+    private SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>> connectionHandler;
 
     public String getServerHost() {
         return serverHost;
@@ -28,6 +30,10 @@ public class PunchingClient implements InitializingBean {
 
     public Channel getChannel() {
         return channel;
+    }
+
+    public void setConnectionHandler(SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>> connectionHandler) {
+        this.connectionHandler = connectionHandler;
     }
 
     public PunchingClient(String host, int port) {
@@ -56,6 +62,7 @@ public class PunchingClient implements InitializingBean {
                         ChannelPipeline pipeline = ch.pipeline();
                         pipeline.addFirst("register", new RegisterHandler(serverAddress));
                         pipeline.addLast("client", new ClientHandler(connectionManager));
+                        pipeline.addLast("connection", connectionHandler);
                     }
                 });
         channel = bootstrap.bind(local).sync().channel();
@@ -74,7 +81,7 @@ public class PunchingClient implements InitializingBean {
         return connection;
     }
 
-    public ChannelFuture writeAndFlush(AddressedEnvelope envelope) {
+    public ChannelFuture writeAndFlush(AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
         ChannelFuture future = channel.writeAndFlush(envelope);
         return future;
     }

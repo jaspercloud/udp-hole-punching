@@ -6,12 +6,12 @@ import org.jaspercloud.punching.proto.PunchingProtos;
 
 import java.net.InetSocketAddress;
 
-public class AddressedEnvelopeBuilder {
+public class AddressedEnvelopeBuilder<T> {
 
-    private PunchingProtos.PunchingMessage message;
+    private T message;
     private InetSocketAddress sender;
 
-    public AddressedEnvelopeBuilder message(PunchingProtos.PunchingMessage message) {
+    public AddressedEnvelopeBuilder message(T message) {
         this.message = message;
         return this;
     }
@@ -21,8 +21,8 @@ public class AddressedEnvelopeBuilder {
         return this;
     }
 
-    public AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> build() {
-        AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope = new DefaultAddressedEnvelope<>(message, null, sender);
+    public AddressedEnvelope<T, InetSocketAddress> build() {
+        AddressedEnvelope<T, InetSocketAddress> envelope = new DefaultAddressedEnvelope<>(message, null, sender);
         return envelope;
     }
 }

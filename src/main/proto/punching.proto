@@ -9,6 +9,7 @@ enum MsgType {
   RespRegisterType = 4;
   ReqRelayPunchingType = 5;
   RespRelayPunchingType = 6;
+  Data = 7;
 }
 
 message PunchingMessage {

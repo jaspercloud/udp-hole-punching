@@ -164,8 +164,11 @@ public class PunchingConnectionImpl implements PunchingConnection {
     }
 
     @Override
-    public ChannelFuture writeAndFlush(Object data) {
-        AddressedEnvelope envelope = new DefaultAddressedEnvelope(data, new InetSocketAddress(punchingHost, punchingPort));
+    public ChannelFuture writeAndFlush(PunchingProtos.PunchingMessage data) {
+        AddressedEnvelope envelope = new AddressedEnvelopeBuilder()
+                .sender(new InetSocketAddress(punchingHost, punchingPort))
+                .message(data)
+                .build();
         ChannelFuture future = punchingClient.writeAndFlush(envelope);
         return future;
     }

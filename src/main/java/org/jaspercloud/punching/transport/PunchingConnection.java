@@ -19,7 +19,7 @@ public interface PunchingConnection {
 
     void close();
 
-    ChannelFuture writeAndFlush(Object data);
+    ChannelFuture writeAndFlush(PunchingProtos.PunchingMessage data);
 
     void onChannelRead(ChannelHandlerContext ctx, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) throws Exception;
 }
