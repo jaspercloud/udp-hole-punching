@@ -6,17 +6,46 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.concurrent.ScheduledFuture;
 import org.jaspercloud.punching.domain.NodeData;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.springframework.beans.factory.InitializingBean;
 
 import java.net.InetSocketAddress;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-public class NodeManager {
+public class NodeManager implements InitializingBean {
 
     private Map<String, NodeData> nodeMap = new ConcurrentHashMap<>();
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Iterator<Map.Entry<String, NodeData>> iterator = nodeMap.entrySet().iterator();
+                    while (iterator.hasNext()) {
+                        Map.Entry<String, NodeData> next = iterator.next();
+                        long now = System.currentTimeMillis();
+                        Long lastPingTime = next.getValue().getPingTime();
+                        long diff = now - lastPingTime;
+                        if (diff > (30 * 1000L)) {
+                            System.out.println("channel timeout");
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                try {
+                    Thread.sleep(30 * 1000L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
 
     public void updateNodePort(Channel channel, String nodeHost, int nodePort) {
         NodeData nodeData = nodeMap.get(nodeHost);
@@ -38,6 +67,7 @@ public class NodeManager {
             nodeData.setPingFuture(createPingFuture(channel, nodeData, 5000));
         }
         future.complete(true);
+        nodeData.setPingTime(System.currentTimeMillis());
     }
 
     public NodeData addNode(Channel channel, String nodeHost, int nodePort) {

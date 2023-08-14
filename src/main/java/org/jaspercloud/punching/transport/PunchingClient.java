@@ -24,7 +24,7 @@ public class PunchingClient implements InitializingBean {
     private int serverPort;
     private int localPort;
     private Channel channel;
-    private NodeManager nodeManager = new NodeManager();
+    private NodeManager nodeManager;
 
     public PunchingClient(String host, int port) {
         this(host, port, 0);
@@ -38,6 +38,8 @@ public class PunchingClient implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        nodeManager = new NodeManager();
+        nodeManager.afterPropertiesSet();
         InetSocketAddress serverAddress = new InetSocketAddress(serverHost, serverPort);
         InetSocketAddress local = new InetSocketAddress("0.0.0.0", localPort);
         NioEventLoopGroup group = new NioEventLoopGroup();
@@ -83,6 +85,9 @@ public class PunchingClient implements InitializingBean {
         }, 0, 100, TimeUnit.MILLISECONDS);
         try {
             nodeData.getFuture().get(timeout, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            nodeData.getPingFuture().cancel(true);
+            throw e;
         } finally {
             relayPunchingSchedule.cancel(true);
         }

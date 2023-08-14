@@ -8,8 +8,9 @@ public class NodeData {
 
     private String nodeHost;
     private int nodePort;
-    private CompletableFuture future = new CompletableFuture();
     private ScheduledFuture<?> pingFuture;
+    private CompletableFuture future = new CompletableFuture();
+    private Long pingTime = System.currentTimeMillis();
 
     public String getNodeHost() {
         return nodeHost;
@@ -37,6 +38,14 @@ public class NodeData {
 
     public void setPingFuture(ScheduledFuture<?> pingFuture) {
         this.pingFuture = pingFuture;
+    }
+
+    public Long getPingTime() {
+        return pingTime;
+    }
+
+    public void setPingTime(Long pingTime) {
+        this.pingTime = pingTime;
     }
 
     public NodeData() {
