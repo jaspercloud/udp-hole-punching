@@ -19,6 +19,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
     private Logger logger = LoggerFactory.getLogger(getClass());
 
     private PunchingClient punchingClient;
+    private PunchingConnectionHandler handler;
     private String id;
     private String punchingHost;
     private int punchingPort;
@@ -30,10 +31,12 @@ public class PunchingConnectionImpl implements PunchingConnection {
     private long pingTime = System.currentTimeMillis();
 
     public PunchingConnectionImpl(PunchingClient punchingClient,
+                                  PunchingConnectionHandler handler,
                                   String id,
                                   String host,
                                   int port) {
         this.punchingClient = punchingClient;
+        this.handler = handler;
         this.id = id;
         this.punchingHost = host;
         this.punchingPort = port;
@@ -72,6 +75,10 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 punchingPort = port;
                 break;
             }
+            default: {
+                handler.onRead(this, envelope);
+                break;
+            }
         }
     }
 
@@ -91,6 +98,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
             pingFuture.cancel(true);
             relayPunchingSchedule.cancel(true);
         }
+        handler.onActive(this);
         pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
             writePing();
         }, 0, 5000, TimeUnit.MILLISECONDS);
@@ -111,6 +119,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
             checkHeartFuture.cancel(true);
         }
         active = false;
+        handler.onInActive(this);
     }
 
     private void checkHeart() {
@@ -118,6 +127,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
         long diff = now - pingTime;
         if (diff >= 30000) {
             active = false;
+            handler.onInActive(this);
         }
     }
 

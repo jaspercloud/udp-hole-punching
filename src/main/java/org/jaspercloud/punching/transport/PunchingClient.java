@@ -67,9 +67,9 @@ public class PunchingClient implements InitializingBean {
         });
     }
 
-    public PunchingConnection createConnection(String host, int port) {
+    public PunchingConnection createConnection(String host, int port, PunchingConnectionHandler handler) {
         String id = UUID.randomUUID().toString();
-        PunchingConnection connection = new PunchingConnectionImpl(this, id, host, port);
+        PunchingConnection connection = new PunchingConnectionImpl(this, handler, id, host, port);
         connectionManager.addConnection(connection);
         return connection;
     }
