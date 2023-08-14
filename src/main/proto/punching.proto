@@ -7,7 +7,7 @@ enum MsgType {
   RespRegisterType = 2;
   PingType = 3;
   PongType = 4;
-  PunchingType = 5;
+  RelayPunchingType = 5;
 }
 
 message PunchingMessage {

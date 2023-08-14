@@ -42,8 +42,8 @@ public class PunchingServer implements InitializingBean {
                                         processRegister(ctx, msg.sender(), request);
                                         break;
                                     }
-                                    case PunchingProtos.MsgType.PunchingType_VALUE: {
-                                        processPunching(ctx, msg.sender(), request);
+                                    case PunchingProtos.MsgType.RelayPunchingType_VALUE: {
+                                        processRelayPunching(ctx, msg.sender(), request);
                                         break;
                                     }
                                 }
@@ -61,7 +61,7 @@ public class PunchingServer implements InitializingBean {
     }
 
     private void processRegister(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
-        String host = sender.getHostName();
+        String host = sender.getHostString();
         int port = sender.getPort();
         System.out.println(String.format("register: %s:%d", host, port));
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
@@ -77,10 +77,10 @@ public class PunchingServer implements InitializingBean {
         ctx.writeAndFlush(packet);
     }
 
-    private void processPunching(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
+    private void processRelayPunching(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
         try {
             PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
-            System.out.println(String.format("%s:%d -> %s:%d",
+            System.out.println(String.format("relayPunching: %s:%d -> %s:%d",
                     punchingData.getPingHost(), punchingData.getPingPort(),
                     punchingData.getPongHost(), punchingData.getPongPort()));
             ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), request);
