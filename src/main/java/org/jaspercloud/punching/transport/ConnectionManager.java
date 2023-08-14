@@ -2,7 +2,6 @@ package org.jaspercloud.punching.transport;
 
 import io.netty.channel.AddressedEnvelope;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.socket.DatagramPacket;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,13 +26,12 @@ public class ConnectionManager implements InitializingBean {
         connectionMap.put(connection.getId(), connection);
     }
 
-    public void channelRead(ChannelHandlerContext ctx, DatagramPacket packet) {
-        PunchingProtos.PunchingMessage request = ProtosUtil.toProto(packet.content());
+    public void channelRead(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage message) {
         for (PunchingConnection connection : connectionMap.values()) {
             try {
                 AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope = new AddressedEnvelopeBuilder()
-                        .message(request)
-                        .sender(packet.sender())
+                        .sender(sender)
+                        .message(message)
                         .build();
                 connection.onChannelRead(ctx, envelope);
             } catch (Exception e) {

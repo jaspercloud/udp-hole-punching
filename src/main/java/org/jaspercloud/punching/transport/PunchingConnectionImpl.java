@@ -51,21 +51,12 @@ public class PunchingConnectionImpl implements PunchingConnection {
 
     @Override
     public void onChannelRead(ChannelHandlerContext ctx, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) throws Exception {
-        switch (envelope.content().getType().getNumber()) {
-            case PunchingProtos.MsgType.PingType_VALUE: {
-                logger.debug("recvPing: {}:{}", envelope.sender().getHostString(), envelope.sender().getPort());
-                PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                        .setType(PunchingProtos.MsgType.PongType)
-                        .setReqId(envelope.content().getReqId())
-                        .build();
-                ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
-                DatagramPacket data = new DatagramPacket(byteBuf, envelope.sender());
-                ctx.writeAndFlush(data);
-                break;
-            }
+        InetSocketAddress sender = envelope.sender();
+        PunchingProtos.PunchingMessage request = envelope.content();
+        switch (request.getType().getNumber()) {
             case PunchingProtos.MsgType.PongType_VALUE: {
-                String host = envelope.sender().getHostString();
-                int port = envelope.sender().getPort();
+                String host = sender.getHostString();
+                int port = sender.getPort();
                 logger.debug("recvPong: {}:{}", host, port);
                 active = true;
                 pingTime = System.currentTimeMillis();
@@ -74,23 +65,9 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 }
                 break;
             }
-            case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
-                PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(envelope.content().getData());
-                logger.debug("recvReqPunching: {}:{} -> {}:{}",
-                        punchingData.getPingHost(), punchingData.getPingPort(),
-                        punchingData.getPongHost(), punchingData.getPongPort());
-                PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                        .setType(PunchingProtos.MsgType.RespRelayPunchingType)
-                        .setReqId(envelope.content().getReqId())
-                        .build();
-                ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
-                DatagramPacket data = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort()));
-                ctx.writeAndFlush(data);
-                break;
-            }
             case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
-                String host = envelope.sender().getHostString();
-                int port = envelope.sender().getPort();
+                String host = sender.getHostString();
+                int port = sender.getPort();
                 logger.debug("recvRespPunching: {}:{}", host, port);
                 punchingPort = port;
                 break;
