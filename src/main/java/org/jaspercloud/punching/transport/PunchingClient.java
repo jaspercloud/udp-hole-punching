@@ -8,7 +8,6 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.ScheduledFuture;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.springframework.beans.factory.InitializingBean;
 
@@ -61,20 +60,19 @@ public class PunchingClient implements InitializingBean {
                                     @Override
                                     public void operationComplete(ChannelFuture future) throws Exception {
                                         Channel channel = ctx.channel();
-//                                        channel.eventLoop().scheduleAtFixedRate(() -> {
-                                        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                                                .setType(PunchingProtos.MsgType.ReqRegisterType)
-                                                .setReqId(UUID.randomUUID().toString())
-                                                .build();
-                                        ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-                                        DatagramPacket packet = new DatagramPacket(byteBuf, remote);
-                                        channel.writeAndFlush(packet);
-//                                        }, 0, 5, TimeUnit.SECONDS);
+                                        channel.eventLoop().scheduleAtFixedRate(() -> {
+                                            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                                                    .setType(PunchingProtos.MsgType.ReqRegisterType)
+                                                    .setReqId(UUID.randomUUID().toString())
+                                                    .build();
+                                            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
+                                            DatagramPacket packet = new DatagramPacket(byteBuf, remote);
+                                            channel.writeAndFlush(packet);
+                                        }, 0, 5, TimeUnit.SECONDS);
                                     }
                                 });
                                 super.bind(ctx, localAddress, bindPromise);
                             }
-
 
                             @Override
                             public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -93,7 +91,10 @@ public class PunchingClient implements InitializingBean {
                                             PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
                                             AttributeKeyUtil.connectionData(ctx.channel()).set(connectionData);
                                             if (!promise.isDone()) {
-                                                System.out.println("fireChannelActive");
+                                                InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
+                                                System.out.println(String.format("active: %s:%d -> %s:%d",
+                                                        localAddress.getHostName(), localAddress.getPort(),
+                                                        connectionData.getHost(), connectionData.getPort()));
                                                 promise.setSuccess();
                                                 ctx.fireChannelActive();
                                             }
@@ -128,9 +129,9 @@ public class PunchingClient implements InitializingBean {
                                                 .setType(PunchingProtos.MsgType.PongType)
                                                 .setReqId(request.getReqId())
                                                 .build();
-                                        ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
+                                        ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
                                         DatagramPacket data = new DatagramPacket(byteBuf, packet.sender());
-                                        channel.writeAndFlush(data);
+                                        ctx.writeAndFlush(data);
                                         break;
                                     }
                                     case PunchingProtos.MsgType.PongType_VALUE: {
@@ -142,10 +143,11 @@ public class PunchingClient implements InitializingBean {
                                     }
                                     case PunchingProtos.MsgType.PunchingType_VALUE: {
                                         PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
-                                        ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), request.toBuilder()
+                                        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                                                 .setType(PunchingProtos.MsgType.PongType)
                                                 .setReqId(request.getReqId())
-                                                .build());
+                                                .build();
+                                        ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
                                         DatagramPacket data = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort()));
                                         ctx.writeAndFlush(data);
                                         break;
@@ -164,41 +166,70 @@ public class PunchingClient implements InitializingBean {
         });
     }
 
+//    public void punching(String host, int port, long timeout) throws ExecutionException, InterruptedException, TimeoutException {
+//        String id = channel.id().asLongText();
+//        CompletableFuture future = new CompletableFuture();
+//        futureMap.put(id, future);
+//        ScheduledFuture<?> pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
+//            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+//                    .setType(PunchingProtos.MsgType.PingType)
+//                    .setReqId(id)
+//                    .build();
+//            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
+//            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(host, port));
+//            System.out.println(String.format("Ping: %s:%d", host, port));
+//            channel.writeAndFlush(packet);
+//        }, 0, 1000, TimeUnit.MILLISECONDS);
+//        ScheduledFuture<?> punchingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
+//            PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(channel).get();
+//            PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.newBuilder()
+//                    .setPingHost(connectionData.getHost())
+//                    .setPingPort(connectionData.getPort())
+//                    .setPongHost(host)
+//                    .setPongPort(port)
+//                    .build();
+//            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+//                    .setType(PunchingProtos.MsgType.PunchingType)
+//                    .setReqId(id)
+//                    .setData(punchingData.toByteString())
+//                    .build();
+//            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
+//            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(serverHost, serverPort));
+//            System.out.println(String.format("Punching: %s:%d", serverHost, serverPort));
+//            channel.writeAndFlush(packet);
+//        }, 0, 1000, TimeUnit.MILLISECONDS);
+//        try {
+//            future.get(timeout, TimeUnit.MILLISECONDS);
+//        } finally {
+//            pingFuture.cancel(true);
+//            punchingFuture.cancel(true);
+//        }
+//    }
+
     public void punching(String host, int port, long timeout) throws ExecutionException, InterruptedException, TimeoutException {
         String id = channel.id().asLongText();
         CompletableFuture future = new CompletableFuture();
         futureMap.put(id, future);
-        ScheduledFuture<?> pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setType(PunchingProtos.MsgType.PingType)
-                    .setReqId(id)
-                    .build();
-            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(host, port));
-            channel.writeAndFlush(packet);
-        }, 0, 100, TimeUnit.MILLISECONDS);
-        ScheduledFuture<?> punchingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-            PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(channel).get();
-            PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.newBuilder()
-                    .setPingHost(connectionData.getHost())
-                    .setPingPort(connectionData.getPort())
-                    .setPongHost(host)
-                    .setPongPort(port)
-                    .build();
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setType(PunchingProtos.MsgType.PunchingType)
-                    .setReqId(id)
-                    .setData(punchingData.toByteString())
-                    .build();
-            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(serverHost, serverPort));
-            channel.writeAndFlush(packet);
-        }, 0, 100, TimeUnit.MILLISECONDS);
+        PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(channel).get();
+        PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.newBuilder()
+                .setPingHost(connectionData.getHost())
+                .setPingPort(connectionData.getPort())
+                .setPongHost(host)
+                .setPongPort(port)
+                .build();
+        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setType(PunchingProtos.MsgType.PunchingType)
+                .setReqId(id)
+                .setData(punchingData.toByteString())
+                .build();
+        ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
+        DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(serverHost, serverPort));
+        System.out.println(String.format("Punching: %s:%d", serverHost, serverPort));
+        channel.writeAndFlush(packet);
         try {
             future.get(timeout, TimeUnit.MILLISECONDS);
         } finally {
-            pingFuture.cancel(true);
-            punchingFuture.cancel(true);
+            futureMap.remove(id);
         }
     }
 }
