@@ -3,11 +3,12 @@ option java_package = "org.jaspercloud.punching.proto";
 option java_outer_classname = "PunchingProtos";
 
 enum MsgType {
-  ReqRegisterType = 1;
-  RespRegisterType = 2;
-  PingType = 3;
-  PongType = 4;
-  RelayPunchingType = 5;
+  PingType = 1;
+  PongType = 2;
+  ReqRegisterType = 3;
+  RespRegisterType = 4;
+  ReqRelayPunchingType = 5;
+  RespRelayPunchingType = 6;
 }
 
 message PunchingMessage {

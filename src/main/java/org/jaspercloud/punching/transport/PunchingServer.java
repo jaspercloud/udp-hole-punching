@@ -42,7 +42,7 @@ public class PunchingServer implements InitializingBean {
                                         processRegister(ctx, msg.sender(), request);
                                         break;
                                     }
-                                    case PunchingProtos.MsgType.RelayPunchingType_VALUE: {
+                                    case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
                                         processRelayPunching(ctx, msg.sender(), request);
                                         break;
                                     }

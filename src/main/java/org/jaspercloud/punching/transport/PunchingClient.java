@@ -8,14 +8,15 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.util.concurrent.ScheduledFuture;
+import org.jaspercloud.punching.domain.NodeData;
 import org.jaspercloud.punching.domain.RelayPunchingData;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.springframework.beans.factory.InitializingBean;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class PunchingClient implements InitializingBean {
 
@@ -23,8 +24,7 @@ public class PunchingClient implements InitializingBean {
     private int serverPort;
     private int localPort;
     private Channel channel;
-
-    private Map<String, CompletableFuture> futureMap = new ConcurrentHashMap<>();
+    private NodeManager nodeManager = new NodeManager();
 
     public PunchingClient(String host, int port) {
         this(host, port, 0);
@@ -49,7 +49,7 @@ public class PunchingClient implements InitializingBean {
                     protected void initChannel(DatagramChannel ch) throws Exception {
                         ChannelPipeline pipeline = ch.pipeline();
                         pipeline.addFirst("register", new RegisterHandler(serverAddress));
-                        pipeline.addLast("handler", new ClientHandler(futureMap));
+                        pipeline.addLast("handler", new ClientHandler(nodeManager));
                     }
                 });
         channel = bootstrap.bind(local).sync().channel();
@@ -62,23 +62,7 @@ public class PunchingClient implements InitializingBean {
     }
 
     public void punching(String host, int port, long timeout) throws ExecutionException, InterruptedException, TimeoutException {
-        AtomicReference<Integer> portRef = new AtomicReference<>(port);
-        String id = channel.id().asLongText();
-        CompletableFuture<RelayPunchingData> future = new CompletableFuture<>();
-        future.thenAccept(data -> {
-            portRef.set(data.getPort());
-        });
-        futureMap.put(id, future);
-        ScheduledFuture<?> pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setType(PunchingProtos.MsgType.PingType)
-                    .setReqId(id)
-                    .build();
-            ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(host, portRef.get()));
-            System.out.println(String.format("ping: %s:%d", packet.recipient().getHostString(), packet.recipient().getPort()));
-            channel.writeAndFlush(packet);
-        }, 0, 1000, TimeUnit.MILLISECONDS);
+        NodeData nodeData = nodeManager.addNode(channel, host, port);
         ScheduledFuture<?> relayPunchingSchedule = channel.eventLoop().scheduleAtFixedRate(() -> {
             PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(channel).get();
             PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.newBuilder()
@@ -88,8 +72,8 @@ public class PunchingClient implements InitializingBean {
                     .setPongPort(port)
                     .build();
             PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setType(PunchingProtos.MsgType.RelayPunchingType)
-                    .setReqId(id)
+                    .setType(PunchingProtos.MsgType.ReqRelayPunchingType)
+                    .setReqId(UUID.randomUUID().toString())
                     .setData(punchingData.toByteString())
                     .build();
             ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
@@ -98,10 +82,8 @@ public class PunchingClient implements InitializingBean {
             channel.writeAndFlush(packet);
         }, 0, 1000, TimeUnit.MILLISECONDS);
         try {
-            future.get(timeout, TimeUnit.MILLISECONDS);
+            nodeData.getFuture().get(timeout, TimeUnit.MILLISECONDS);
         } finally {
-            futureMap.remove(id);
-            pingFuture.cancel(true);
             relayPunchingSchedule.cancel(true);
         }
     }

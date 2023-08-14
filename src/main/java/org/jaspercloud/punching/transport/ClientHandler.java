@@ -4,19 +4,16 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.socket.DatagramPacket;
-import org.jaspercloud.punching.domain.RelayPunchingData;
 import org.jaspercloud.punching.proto.PunchingProtos;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 public class ClientHandler extends ChannelInboundHandlerAdapter {
 
-    private Map<String, CompletableFuture> futureMap;
+    private NodeManager nodeManager;
 
-    public ClientHandler(Map<String, CompletableFuture> futureMap) {
-        this.futureMap = futureMap;
+    public ClientHandler(NodeManager nodeManager) {
+        this.nodeManager = nodeManager;
     }
 
     @Override
@@ -43,25 +40,31 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                 break;
             }
             case PunchingProtos.MsgType.PongType_VALUE: {
-                System.out.println(String.format("recvPong: %s:%d", packet.sender().getHostString(), packet.sender().getPort()));
-                CompletableFuture future = futureMap.get(request.getReqId());
-                if (null != future) {
-                    future.complete(new RelayPunchingData(packet.sender().getHostString(), packet.sender().getPort()));
-                }
+                String host = packet.sender().getHostString();
+                int port = packet.sender().getPort();
+                System.out.println(String.format("recvPong: %s:%d", host, port));
+                nodeManager.updatePong(ctx.channel(), host, port);
                 break;
             }
-            case PunchingProtos.MsgType.RelayPunchingType_VALUE: {
+            case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
                 PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
-                System.out.println(String.format("recvPunching: %s:%d -> %s:%d",
+                System.out.println(String.format("recvReqPunching: %s:%d -> %s:%d",
                         punchingData.getPingHost(), punchingData.getPingPort(),
                         punchingData.getPongHost(), punchingData.getPongPort()));
                 PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                        .setType(PunchingProtos.MsgType.PongType)
+                        .setType(PunchingProtos.MsgType.RespRelayPunchingType)
                         .setReqId(request.getReqId())
                         .build();
                 ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
                 DatagramPacket data = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort()));
                 ctx.writeAndFlush(data);
+                break;
+            }
+            case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
+                String host = packet.sender().getHostString();
+                int port = packet.sender().getPort();
+                System.out.println(String.format("recvRespPunching: %s:%d", host, port));
+                nodeManager.updateNodePort(ctx.channel(), host, port);
                 break;
             }
         }

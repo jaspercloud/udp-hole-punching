@@ -40,6 +40,7 @@ public class RegisterHandler extends ChannelDuplexHandler {
                             .build();
                     ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
                     DatagramPacket packet = new DatagramPacket(byteBuf, serverAddress);
+                    System.out.println(String.format("sendRegister: %s:%d", serverAddress.getHostString(), serverAddress.getPort()));
                     channel.writeAndFlush(packet);
                 }, 0, 5, TimeUnit.SECONDS);
             }
