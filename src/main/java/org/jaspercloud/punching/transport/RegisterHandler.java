@@ -64,7 +64,7 @@ public class RegisterHandler extends ChannelDuplexHandler {
                     PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
                     AttributeKeyUtil.connectionData(ctx.channel()).set(connectionData);
                     InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
-                    logger.debug("register: {} -> {}:{}",
+                    logger.debug("recvRegister: {} -> {}:{}",
                             localAddress.getPort(),
                             connectionData.getHost(), connectionData.getPort());
                     if (!promise.isDone()) {

@@ -129,7 +129,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 .build();
         ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
         DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingHost, punchingPort));
-        logger.debug("ping: {}:{}", packet.recipient().getHostString(), packet.recipient().getPort());
+        logger.debug("sendPing: {}:{}", packet.recipient().getHostString(), packet.recipient().getPort());
         channel.writeAndFlush(packet);
     }
 
