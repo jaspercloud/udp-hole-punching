@@ -1,5 +1,6 @@
 package org.jaspercloud.punching;
 
+import com.google.protobuf.ByteString;
 import io.netty.channel.AddressedEnvelope;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -12,6 +13,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @SpringBootApplication
@@ -26,11 +28,17 @@ public class UdpHolePunchingApplication {
         punchingClient.setConnectionHandler(new SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>>() {
             @Override
             protected void channelRead0(ChannelHandlerContext ctx, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> msg) throws Exception {
-                System.out.println("read: " + msg.content().getType().toString());
+                PunchingProtos.PunchingMessage message = msg.content();
+                switch (message.getType().getNumber()) {
+                    case PunchingProtos.MsgType.Data_VALUE: {
+                        System.out.println("msg: " + new String(message.getData().toByteArray()));
+                        break;
+                    }
+                }
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 52338, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 50939, new PunchingConnectionHandler() {
             @Override
             public void onRead(PunchingConnection connection, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
                 System.out.println("onRead");
@@ -44,6 +52,7 @@ public class UdpHolePunchingApplication {
             PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                     .setType(PunchingProtos.MsgType.Data)
                     .setReqId(UUID.randomUUID().toString())
+                    .setData(ByteString.copyFrom("hello".getBytes(StandardCharsets.UTF_8)))
                     .build();
             connection.writeAndFlush(message);
             Thread.sleep(1000L);

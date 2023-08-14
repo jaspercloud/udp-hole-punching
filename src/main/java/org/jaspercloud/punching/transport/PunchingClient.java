@@ -82,7 +82,11 @@ public class PunchingClient implements InitializingBean {
     }
 
     public ChannelFuture writeAndFlush(AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
-        ChannelFuture future = channel.writeAndFlush(envelope);
+        AddressedEnvelope data = new AddressedEnvelopeBuilder()
+                .recipient(envelope.recipient())
+                .message(ProtosUtil.toBuffer(channel.alloc(), envelope.content()))
+                .build();
+        ChannelFuture future = channel.writeAndFlush(data);
         return future;
     }
 }
