@@ -22,6 +22,10 @@ message ConnectionData {
   required int32 port = 2;
 }
 
+message Heart {
+  required string channelId = 1;
+}
+
 message PunchingData {
   required string pingHost = 1;
   required int32 pingPort = 2;
