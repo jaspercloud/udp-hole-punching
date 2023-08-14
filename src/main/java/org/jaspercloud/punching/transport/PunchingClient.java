@@ -143,6 +143,9 @@ public class PunchingClient implements InitializingBean {
                                     }
                                     case PunchingProtos.MsgType.PunchingType_VALUE: {
                                         PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
+                                        System.out.println(String.format("recvPunching: %s:%d -> %s:%d",
+                                                punchingData.getPingHost(), punchingData.getPingPort(),
+                                                punchingData.getPongHost(), punchingData.getPongPort()));
                                         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                                                 .setType(PunchingProtos.MsgType.PongType)
                                                 .setReqId(request.getReqId())
