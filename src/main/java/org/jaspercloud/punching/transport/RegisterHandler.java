@@ -5,6 +5,8 @@ import io.netty.channel.*;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.ReferenceCountUtil;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -12,6 +14,8 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class RegisterHandler extends ChannelDuplexHandler {
+
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     private InetSocketAddress serverAddress;
 
@@ -40,7 +44,7 @@ public class RegisterHandler extends ChannelDuplexHandler {
                             .build();
                     ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
                     DatagramPacket packet = new DatagramPacket(byteBuf, serverAddress);
-                    System.out.println(String.format("sendRegister: %s:%d", serverAddress.getHostString(), serverAddress.getPort()));
+                    logger.debug("sendRegister: {}:{}", serverAddress.getHostString(), serverAddress.getPort());
                     channel.writeAndFlush(packet);
                 }, 0, 5, TimeUnit.SECONDS);
             }
@@ -60,9 +64,9 @@ public class RegisterHandler extends ChannelDuplexHandler {
                     PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
                     AttributeKeyUtil.connectionData(ctx.channel()).set(connectionData);
                     InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
-                    System.out.println(String.format("register: %d -> %s:%d",
+                    logger.debug("register: {} -> {}:{}",
                             localAddress.getPort(),
-                            connectionData.getHost(), connectionData.getPort()));
+                            connectionData.getHost(), connectionData.getPort());
                     if (!promise.isDone()) {
                         promise.setSuccess();
                     }

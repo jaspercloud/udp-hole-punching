@@ -5,6 +5,8 @@ import io.netty.channel.*;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.concurrent.ScheduledFuture;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.UUID;
@@ -13,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class PunchingConnectionImpl implements PunchingConnection {
+
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     private PunchingClient punchingClient;
     private String id;
@@ -49,7 +53,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
     public void onChannelRead(ChannelHandlerContext ctx, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) throws Exception {
         switch (envelope.content().getType().getNumber()) {
             case PunchingProtos.MsgType.PingType_VALUE: {
-                System.out.println(String.format("recvPing: %s:%d", envelope.sender().getHostString(), envelope.sender().getPort()));
+                logger.debug("recvPing: {}:{}", envelope.sender().getHostString(), envelope.sender().getPort());
                 PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                         .setType(PunchingProtos.MsgType.PongType)
                         .setReqId(envelope.content().getReqId())
@@ -62,7 +66,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
             case PunchingProtos.MsgType.PongType_VALUE: {
                 String host = envelope.sender().getHostString();
                 int port = envelope.sender().getPort();
-                System.out.println(String.format("recvPong: %s:%d", host, port));
+                logger.debug("recvPong: {}:{}", host, port);
                 active = true;
                 pingTime = System.currentTimeMillis();
                 if (!promise.isDone()) {
@@ -72,9 +76,9 @@ public class PunchingConnectionImpl implements PunchingConnection {
             }
             case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
                 PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(envelope.content().getData());
-                System.out.println(String.format("recvReqPunching: %s:%d -> %s:%d",
+                logger.debug("recvReqPunching: {}:{} -> {}:{}",
                         punchingData.getPingHost(), punchingData.getPingPort(),
-                        punchingData.getPongHost(), punchingData.getPongPort()));
+                        punchingData.getPongHost(), punchingData.getPongPort());
                 PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                         .setType(PunchingProtos.MsgType.RespRelayPunchingType)
                         .setReqId(envelope.content().getReqId())
@@ -87,7 +91,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
             case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
                 String host = envelope.sender().getHostString();
                 int port = envelope.sender().getPort();
-                System.out.println(String.format("recvRespPunching: %s:%d", host, port));
+                logger.debug("recvRespPunching: {}:{}", host, port);
                 punchingPort = port;
                 break;
             }
@@ -148,7 +152,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 .build();
         ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
         DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingHost, punchingPort));
-        System.out.println(String.format("ping: %s:%d", packet.recipient().getHostString(), packet.recipient().getPort()));
+        logger.debug("ping: {}:{}", packet.recipient().getHostString(), packet.recipient().getPort());
         channel.writeAndFlush(packet);
     }
 
@@ -168,7 +172,7 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 .build();
         ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
         DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingClient.getServerHost(), punchingClient.getServerPort()));
-        System.out.println(String.format("relayPunching: %s:%d", punchingClient.getServerHost(), punchingClient.getServerPort()));
+        logger.debug("relayPunching: {}:{}", punchingClient.getServerHost(), punchingClient.getServerPort());
         channel.writeAndFlush(packet);
     }
 

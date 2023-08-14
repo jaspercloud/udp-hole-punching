@@ -10,12 +10,16 @@ import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import org.jaspercloud.punching.exception.ParseException;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 
 import java.net.InetSocketAddress;
 import java.util.UUID;
 
 public class PunchingServer implements InitializingBean {
+
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     private int port;
 
@@ -63,7 +67,7 @@ public class PunchingServer implements InitializingBean {
     private void processRegister(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
         String host = sender.getHostString();
         int port = sender.getPort();
-        System.out.println(String.format("register: %s:%d", host, port));
+        logger.debug("register: {}:{}", host, port);
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                 .setType(PunchingProtos.MsgType.RespRegisterType)
                 .setReqId(UUID.randomUUID().toString())
@@ -80,9 +84,9 @@ public class PunchingServer implements InitializingBean {
     private void processRelayPunching(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
         try {
             PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
-            System.out.println(String.format("relayPunching: %s:%d -> %s:%d",
+            logger.debug("relayPunching: {}:{} -> {}:{}",
                     punchingData.getPingHost(), punchingData.getPingPort(),
-                    punchingData.getPongHost(), punchingData.getPongPort()));
+                    punchingData.getPongHost(), punchingData.getPongPort());
             ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), request);
             DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPongHost(), punchingData.getPongPort()));
             ctx.writeAndFlush(packet);
