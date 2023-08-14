@@ -80,7 +80,7 @@ public class PunchingClient implements InitializingBean {
             DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(serverHost, serverPort));
             System.out.println(String.format("relayPunching: %s:%d", serverHost, serverPort));
             channel.writeAndFlush(packet);
-        }, 0, 1000, TimeUnit.MILLISECONDS);
+        }, 0, 100, TimeUnit.MILLISECONDS);
         try {
             nodeData.getFuture().get(timeout, TimeUnit.MILLISECONDS);
         } finally {

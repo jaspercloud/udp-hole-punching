@@ -12,9 +12,9 @@ public class UdpHolePunchingApplication {
 //        punchingServer.afterPropertiesSet();
         PunchingClient punchingClient = new PunchingClient("47.122.65.163", 1080, 0);
         punchingClient.afterPropertiesSet();
-        punchingClient.punching("61.174.208.54", 56438, 3000);
-//        System.out.println("punching success");
-        System.out.println();
+        punchingClient.punching("61.174.208.54", 58795, 3000);
+        System.out.println("punching success");
+//        System.out.println();
     }
 
 }

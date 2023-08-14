@@ -10,6 +10,7 @@ import org.jaspercloud.punching.proto.PunchingProtos;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -31,7 +32,12 @@ public class NodeManager {
         if (null == nodeData) {
             return;
         }
-        nodeData.getFuture().complete(true);
+        CompletableFuture future = nodeData.getFuture();
+        if (!future.isDone()) {
+            nodeData.getPingFuture().cancel(true);
+            nodeData.setPingFuture(createPingFuture(channel, nodeData, 5000));
+        }
+        future.complete(true);
     }
 
     public NodeData addNode(Channel channel, String nodeHost, int nodePort) {
@@ -42,19 +48,22 @@ public class NodeManager {
         nodeData = new NodeData();
         nodeData.setNodeHost(nodeHost);
         nodeData.setNodePort(nodePort);
-        final NodeData node = nodeData;
+        nodeData.setPingFuture(createPingFuture(channel, nodeData, 100));
+        nodeMap.put(nodeHost, nodeData);
+        return nodeData;
+    }
+
+    private ScheduledFuture<?> createPingFuture(Channel channel, NodeData nodeData, long period) {
         ScheduledFuture<?> pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
             PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                     .setType(PunchingProtos.MsgType.PingType)
                     .setReqId(UUID.randomUUID().toString())
                     .build();
             ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(nodeHost, node.getNodePort()));
+            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(nodeData.getNodeHost(), nodeData.getNodePort()));
             System.out.println(String.format("ping: %s:%d", packet.recipient().getHostString(), packet.recipient().getPort()));
             channel.writeAndFlush(packet);
-        }, 0, 1000, TimeUnit.MILLISECONDS);
-        nodeData.setPingFuture(pingFuture);
-        nodeMap.put(nodeHost, nodeData);
-        return nodeData;
+        }, 0, period, TimeUnit.MILLISECONDS);
+        return pingFuture;
     }
 }
