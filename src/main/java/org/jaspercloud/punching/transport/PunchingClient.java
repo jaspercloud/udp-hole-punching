@@ -18,7 +18,7 @@ public class PunchingClient implements InitializingBean {
     private int localPort;
     private Channel channel;
     private ConnectionManager connectionManager;
-    private SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>> connectionHandler;
+    private SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> connectionHandler;
 
     public String getServerHost() {
         return serverHost;
@@ -32,7 +32,7 @@ public class PunchingClient implements InitializingBean {
         return channel;
     }
 
-    public void setConnectionHandler(SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>> connectionHandler) {
+    public void setConnectionHandler(SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> connectionHandler) {
         this.connectionHandler = connectionHandler;
     }
 
@@ -64,7 +64,7 @@ public class PunchingClient implements InitializingBean {
                         pipeline.addLast("encoder", new Encoder());
                         pipeline.addLast("register", new RegisterHandler(serverAddress));
                         pipeline.addLast("client", new ClientHandler(connectionManager));
-//                        pipeline.addLast("connection", connectionHandler);
+                        pipeline.addLast("connection", connectionHandler);
                     }
                 });
         channel = bootstrap.bind(local).sync().channel();

@@ -1,36 +1,30 @@
 package org.jaspercloud.punching;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import com.google.protobuf.ByteString;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.jaspercloud.punching.proto.PunchingProtos;
-import org.jaspercloud.punching.transport.*;
-import org.springframework.boot.WebApplicationType;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.jaspercloud.punching.transport.Envelope;
+import org.jaspercloud.punching.transport.PunchingClient;
+import org.jaspercloud.punching.transport.PunchingConnection;
+import org.jaspercloud.punching.transport.PunchingConnectionHandler;
+import org.slf4j.impl.StaticLoggerBinder;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-@SpringBootApplication
-public class UdpHolePunchingApplication {
+public class Client2Test {
 
     public static void main(String[] args) throws Exception {
-        new SpringApplicationBuilder(UdpHolePunchingApplication.class)
-                .web(WebApplicationType.NONE).run(args);
-//        startServer();
-        startClient();
-    }
-
-    private static void startServer() throws Exception {
-        PunchingServer punchingServer = new PunchingServer(1080);
-        punchingServer.afterPropertiesSet();
-    }
-
-    private static void startClient() throws Exception {
-//        "127.0.0.1", 1080
-//        "47.122.65.163", 1080
-        PunchingClient punchingClient = new PunchingClient("47.122.65.163", 1080, 0);
+        LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
+        Logger root = loggerContext.getLogger("ROOT");
+        root.setLevel(Level.INFO);
+        Logger punching = loggerContext.getLogger("org.jaspercloud.punching");
+        punching.setLevel(Level.DEBUG);
+        PunchingClient punchingClient = new PunchingClient("127.0.0.1", 1080, 1002);
         punchingClient.setConnectionHandler(new SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>>() {
             @Override
             protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) throws Exception {
@@ -44,7 +38,7 @@ public class UdpHolePunchingApplication {
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 63184, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("127.0.0.1", 1001, new PunchingConnectionHandler() {
             @Override
             public void onRead(PunchingConnection connection, Envelope<PunchingProtos.PunchingMessage> envelope) {
                 System.out.println("onRead");
@@ -64,5 +58,4 @@ public class UdpHolePunchingApplication {
             Thread.sleep(1000L);
         }
     }
-
 }
