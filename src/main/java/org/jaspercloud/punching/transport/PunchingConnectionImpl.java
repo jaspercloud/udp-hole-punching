@@ -23,13 +23,13 @@ public class PunchingConnectionImpl implements PunchingConnection {
     private PunchingConnectionHandler handler;
     private String id;
     private String punchingHost;
-    private int punchingPort;
-    private boolean active;
+    private volatile int punchingPort;
+    private volatile boolean active;
     private ChannelPromise promise;
     private ScheduledFuture<?> pingFuture;
     private ScheduledFuture<?> relayPunchingSchedule;
     private ScheduledFuture<?> checkHeartFuture;
-    private long pingTime = System.currentTimeMillis();
+    private volatile long pingTime = System.currentTimeMillis();
 
     public PunchingConnectionImpl(PunchingClient punchingClient,
                                   PunchingConnectionHandler handler,

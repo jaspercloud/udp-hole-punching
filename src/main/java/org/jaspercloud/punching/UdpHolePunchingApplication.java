@@ -46,7 +46,7 @@ public class UdpHolePunchingApplication {
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 53933, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 63184, new PunchingConnectionHandler() {
             @Override
             public void onRead(PunchingConnection connection, Envelope<PunchingProtos.PunchingMessage> envelope) {
                 System.out.println("onRead");
