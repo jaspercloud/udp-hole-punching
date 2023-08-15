@@ -5,9 +5,7 @@ import io.netty.channel.AddressedEnvelope;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.jaspercloud.punching.proto.PunchingProtos;
-import org.jaspercloud.punching.transport.PunchingClient;
-import org.jaspercloud.punching.transport.PunchingConnection;
-import org.jaspercloud.punching.transport.PunchingConnectionHandler;
+import org.jaspercloud.punching.transport.*;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -22,8 +20,16 @@ public class UdpHolePunchingApplication {
     public static void main(String[] args) throws Exception {
         new SpringApplicationBuilder(UdpHolePunchingApplication.class)
                 .web(WebApplicationType.NONE).run(args);
-//        PunchingServer punchingServer = new PunchingServer(1080);
-//        punchingServer.afterPropertiesSet();
+//        startServer();
+        startClient();
+    }
+
+    private static void startServer() throws Exception {
+        PunchingServer punchingServer = new PunchingServer(1080);
+        punchingServer.afterPropertiesSet();
+    }
+
+    private static void startClient() throws Exception {
         PunchingClient punchingClient = new PunchingClient("47.122.65.163", 1080, 0);
         punchingClient.setConnectionHandler(new SimpleChannelInboundHandler<AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress>>() {
             @Override
@@ -38,9 +44,9 @@ public class UdpHolePunchingApplication {
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 50939, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 51580, new PunchingConnectionHandler() {
             @Override
-            public void onRead(PunchingConnection connection, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
+            public void onRead(PunchingConnection connection, Envelope<PunchingProtos.PunchingMessage> envelope) {
                 System.out.println("onRead");
             }
         });
@@ -57,7 +63,6 @@ public class UdpHolePunchingApplication {
             connection.writeAndFlush(message);
             Thread.sleep(1000L);
         }
-//        System.out.println();
     }
 
 }

@@ -1,9 +1,6 @@
 package org.jaspercloud.punching.transport;
 
-import io.netty.channel.AddressedEnvelope;
 import org.jaspercloud.punching.proto.PunchingProtos;
-
-import java.net.InetSocketAddress;
 
 public interface PunchingConnectionHandler {
 
@@ -13,6 +10,6 @@ public interface PunchingConnectionHandler {
     default void onInActive(PunchingConnection connection) {
     }
 
-    default void onRead(PunchingConnection connection, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
+    default void onRead(PunchingConnection connection, Envelope<PunchingProtos.PunchingMessage> envelope) {
     }
 }

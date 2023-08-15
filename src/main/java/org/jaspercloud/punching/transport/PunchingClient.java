@@ -60,9 +60,11 @@ public class PunchingClient implements InitializingBean {
                     @Override
                     protected void initChannel(DatagramChannel ch) throws Exception {
                         ChannelPipeline pipeline = ch.pipeline();
-                        pipeline.addFirst("register", new RegisterHandler(serverAddress));
+                        pipeline.addLast("decoder", new Decoder());
+                        pipeline.addLast("encoder", new Encoder());
+                        pipeline.addLast("register", new RegisterHandler(serverAddress));
                         pipeline.addLast("client", new ClientHandler(connectionManager));
-                        pipeline.addLast("connection", connectionHandler);
+//                        pipeline.addLast("connection", connectionHandler);
                     }
                 });
         channel = bootstrap.bind(local).sync().channel();
@@ -81,12 +83,8 @@ public class PunchingClient implements InitializingBean {
         return connection;
     }
 
-    public ChannelFuture writeAndFlush(AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) {
-        AddressedEnvelope data = new AddressedEnvelopeBuilder()
-                .recipient(envelope.recipient())
-                .message(ProtosUtil.toBuffer(channel.alloc(), envelope.content()))
-                .build();
-        ChannelFuture future = channel.writeAndFlush(data);
+    public ChannelFuture writeAndFlush(Envelope<PunchingProtos.PunchingMessage> envelope) {
+        ChannelFuture future = channel.writeAndFlush(envelope);
         return future;
     }
 }

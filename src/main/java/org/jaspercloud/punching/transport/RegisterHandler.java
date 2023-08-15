@@ -1,9 +1,6 @@
 package org.jaspercloud.punching.transport;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import io.netty.channel.socket.DatagramPacket;
-import io.netty.util.ReferenceCountUtil;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +23,11 @@ public class RegisterHandler extends ChannelDuplexHandler {
     @Override
     public void bind(ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) throws Exception {
         ChannelPipeline pipeline = ctx.pipeline();
-        pipeline.addFirst("registerRead", new ChannelInboundHandlerAdapter() {
+        pipeline.addAfter("register", "registerRead", new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                processChannelRead(ctx, msg, promise);
+                Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+                processChannelRead(ctx, envelope, promise);
             }
         });
         ChannelPromise bindPromise = ctx.newPromise();
@@ -42,45 +40,35 @@ public class RegisterHandler extends ChannelDuplexHandler {
                             .setType(PunchingProtos.MsgType.ReqRegisterType)
                             .setReqId(UUID.randomUUID().toString())
                             .build();
-                    ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-                    DatagramPacket packet = new DatagramPacket(byteBuf, serverAddress);
+                    Envelope envelope = Envelope.builder()
+                            .recipient(serverAddress)
+                            .message(message)
+                            .build();
                     logger.debug("sendRegister: {}:{}", serverAddress.getHostString(), serverAddress.getPort());
-                    channel.writeAndFlush(packet);
+                    channel.writeAndFlush(envelope);
                 }, 0, 5, TimeUnit.SECONDS);
             }
         });
         super.bind(ctx, localAddress, bindPromise);
     }
 
-    private void processChannelRead(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        boolean release = true;
-        try {
-            DatagramPacket packet = (DatagramPacket) msg;
-            ByteBuf byteBuf = packet.content();
-            byteBuf.markReaderIndex();
-            PunchingProtos.PunchingMessage request = ProtosUtil.toProto(byteBuf);
-            switch (request.getType().getNumber()) {
-                case PunchingProtos.MsgType.RespRegisterType_VALUE: {
-                    PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
-                    AttributeKeyUtil.connectionData(ctx.channel()).set(connectionData);
-                    InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
-                    logger.debug("recvRegister: {} -> {}:{}",
-                            localAddress.getPort(),
-                            connectionData.getHost(), connectionData.getPort());
-                    if (!promise.isDone()) {
-                        promise.setSuccess();
-                    }
-                    break;
+    private void processChannelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope, ChannelPromise promise) throws Exception {
+        PunchingProtos.PunchingMessage request = envelope.message();
+        switch (request.getType().getNumber()) {
+            case PunchingProtos.MsgType.RespRegisterType_VALUE: {
+                PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
+                AttributeKeyUtil.connectionData(ctx.channel()).set(connectionData);
+                InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
+                logger.debug("recvRegister: {} -> {}:{}",
+                        localAddress.getPort(),
+                        connectionData.getHost(), connectionData.getPort());
+                if (!promise.isDone()) {
+                    promise.setSuccess();
                 }
-                default: {
-                    release = false;
-                    byteBuf.resetReaderIndex();
-                    super.channelRead(ctx, msg);
-                }
+                break;
             }
-        } finally {
-            if (release) {
-                ReferenceCountUtil.release(msg);
+            default: {
+                super.channelRead(ctx, envelope);
             }
         }
     }

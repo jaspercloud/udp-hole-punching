@@ -1,8 +1,9 @@
 package org.jaspercloud.punching.transport;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.*;
-import io.netty.channel.socket.DatagramPacket;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.util.concurrent.ScheduledFuture;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
@@ -53,9 +54,9 @@ public class PunchingConnectionImpl implements PunchingConnection {
     }
 
     @Override
-    public void onChannelRead(ChannelHandlerContext ctx, AddressedEnvelope<PunchingProtos.PunchingMessage, InetSocketAddress> envelope) throws Exception {
+    public void onChannelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) throws Exception {
         InetSocketAddress sender = envelope.sender();
-        PunchingProtos.PunchingMessage request = envelope.content();
+        PunchingProtos.PunchingMessage request = envelope.message();
         switch (request.getType().getNumber()) {
             case PunchingProtos.MsgType.PongType_VALUE: {
                 String host = sender.getHostString();
@@ -137,10 +138,12 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 .setType(PunchingProtos.MsgType.PingType)
                 .setReqId(UUID.randomUUID().toString())
                 .build();
-        ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-        DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingHost, punchingPort));
-        logger.debug("sendPing: {}:{}", packet.recipient().getHostString(), packet.recipient().getPort());
-        channel.writeAndFlush(packet);
+        Envelope envelope = Envelope.builder()
+                .recipient(new InetSocketAddress(punchingHost, punchingPort))
+                .message(message)
+                .build();
+        logger.debug("sendPing: {}:{}", envelope.recipient().getHostString(), envelope.recipient().getPort());
+        channel.writeAndFlush(envelope);
     }
 
     private void writeRelayPunching() {
@@ -157,19 +160,21 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 .setReqId(UUID.randomUUID().toString())
                 .setData(punchingData.toByteString())
                 .build();
-        ByteBuf byteBuf = ProtosUtil.toBuffer(channel.alloc(), message);
-        DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingClient.getServerHost(), punchingClient.getServerPort()));
+        Envelope envelope = Envelope.builder()
+                .recipient(new InetSocketAddress(punchingClient.getServerHost(), punchingClient.getServerPort()))
+                .message(message)
+                .build();
         logger.debug("relayPunching: {}:{}", punchingClient.getServerHost(), punchingClient.getServerPort());
-        channel.writeAndFlush(packet);
+        channel.writeAndFlush(envelope);
     }
 
     @Override
     public ChannelFuture writeAndFlush(PunchingProtos.PunchingMessage data) {
-        AddressedEnvelope envelope = new AddressedEnvelopeBuilder()
+        Envelope<PunchingProtos.PunchingMessage> envelope = Envelope.<PunchingProtos.PunchingMessage>builder()
                 .recipient(new InetSocketAddress(punchingHost, punchingPort))
                 .message(data)
                 .build();
-        InetSocketAddress recipient = (InetSocketAddress) envelope.recipient();
+        InetSocketAddress recipient = envelope.recipient();
         logger.debug("sendData: {}:{}", recipient.getHostString(), recipient.getPort());
         ChannelFuture future = punchingClient.writeAndFlush(envelope);
         return future;

@@ -1,10 +1,7 @@
 package org.jaspercloud.punching.transport;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.AddressedEnvelope;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.socket.DatagramPacket;
 import io.netty.util.ReferenceCountUtil;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
@@ -25,9 +22,9 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         try {
-            DatagramPacket packet = (DatagramPacket) msg;
-            InetSocketAddress sender = packet.sender();
-            PunchingProtos.PunchingMessage request = ProtosUtil.toProto(packet.content());
+            Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+            InetSocketAddress sender = envelope.sender();
+            PunchingProtos.PunchingMessage request = envelope.message();
             switch (request.getType().getNumber()) {
                 case PunchingProtos.MsgType.PingType_VALUE: {
                     logger.debug("recvPing: {}:{}", sender.getHostString(), sender.getPort());
@@ -35,8 +32,10 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .setType(PunchingProtos.MsgType.PongType)
                             .setReqId(request.getReqId())
                             .build();
-                    ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
-                    DatagramPacket data = new DatagramPacket(byteBuf, sender);
+                    Envelope data = Envelope.builder()
+                            .recipient(sender)
+                            .message(message)
+                            .build();
                     ctx.writeAndFlush(data);
                     break;
                 }
@@ -49,17 +48,16 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .setType(PunchingProtos.MsgType.RespRelayPunchingType)
                             .setReqId(request.getReqId())
                             .build();
-                    ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
-                    DatagramPacket data = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort()));
+                    InetSocketAddress address = new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort());
+                    Envelope data = Envelope.builder()
+                            .recipient(address)
+                            .message(message)
+                            .build();
                     ctx.writeAndFlush(data);
                     break;
                 }
                 default: {
-                    connectionManager.channelRead(ctx, sender, request);
-                    AddressedEnvelope envelope = new AddressedEnvelopeBuilder()
-                            .sender(sender)
-                            .message(request)
-                            .build();
+                    connectionManager.channelRead(ctx, envelope);
                     super.channelRead(ctx, envelope);
                     break;
                 }

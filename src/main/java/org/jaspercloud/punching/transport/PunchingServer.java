@@ -2,7 +2,6 @@ package org.jaspercloud.punching.transport;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
@@ -37,6 +36,8 @@ public class PunchingServer implements InitializingBean {
                     @Override
                     protected void initChannel(DatagramChannel ch) throws Exception {
                         ChannelPipeline pipeline = ch.pipeline();
+                        pipeline.addLast("decoder", new Decoder());
+                        pipeline.addLast("encoder", new Encoder());
                         pipeline.addLast(new SimpleChannelInboundHandler<DatagramPacket>() {
                             @Override
                             protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket msg) {
@@ -76,9 +77,11 @@ public class PunchingServer implements InitializingBean {
                         .setPort(port)
                         .build().toByteString())
                 .build();
-        ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), message);
-        DatagramPacket packet = new DatagramPacket(byteBuf, sender);
-        ctx.writeAndFlush(packet);
+        Envelope envelope = Envelope.builder()
+                .recipient(sender)
+                .message(message)
+                .build();
+        ctx.writeAndFlush(envelope);
     }
 
     private void processRelayPunching(ChannelHandlerContext ctx, InetSocketAddress sender, PunchingProtos.PunchingMessage request) {
@@ -87,9 +90,11 @@ public class PunchingServer implements InitializingBean {
             logger.debug("relayPunching: {}:{} -> {}:{}",
                     punchingData.getPingHost(), punchingData.getPingPort(),
                     punchingData.getPongHost(), punchingData.getPongPort());
-            ByteBuf byteBuf = ProtosUtil.toBuffer(ctx.alloc(), request);
-            DatagramPacket packet = new DatagramPacket(byteBuf, new InetSocketAddress(punchingData.getPongHost(), punchingData.getPongPort()));
-            ctx.writeAndFlush(packet);
+            Envelope envelope = Envelope.builder()
+                    .recipient(new InetSocketAddress(punchingData.getPongHost(), punchingData.getPongPort()))
+                    .message(request)
+                    .build();
+            ctx.writeAndFlush(envelope);
         } catch (InvalidProtocolBufferException e) {
             throw new ParseException(e.getMessage(), e);
         }
