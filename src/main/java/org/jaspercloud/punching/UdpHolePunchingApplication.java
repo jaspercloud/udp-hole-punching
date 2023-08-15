@@ -33,13 +33,14 @@ public class UdpHolePunchingApplication {
             @Override
             public void onRead(PunchingConnection connection, byte[] data) {
                 System.out.println("msg: " + new String(data));
+                connection.writeAndFlush(("ack " + new String(data)).getBytes(StandardCharsets.UTF_8));
             }
         });
         punchingClient.afterPropertiesSet();
         PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 52102, new PunchingConnectionHandler() {
             @Override
             public void onRead(PunchingConnection connection, byte[] data) {
-                System.out.println("onRead");
+                System.out.println("msg: " + new String(data));
             }
         });
         connection.connect(3000);
