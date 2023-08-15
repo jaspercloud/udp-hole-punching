@@ -16,6 +16,7 @@ public class PunchingRemoteConnection implements PunchingConnection {
     private String id;
     private InetSocketAddress localAddress;
     private InetSocketAddress remoteAddress;
+    private volatile long pingTime = System.currentTimeMillis();
 
     public void setLocalAddress(InetSocketAddress localAddress) {
         this.localAddress = localAddress;
@@ -23,6 +24,14 @@ public class PunchingRemoteConnection implements PunchingConnection {
 
     public void setRemoteAddress(InetSocketAddress remoteAddress) {
         this.remoteAddress = remoteAddress;
+    }
+
+    public long getPingTime() {
+        return pingTime;
+    }
+
+    public void updateHeart() {
+        pingTime = System.currentTimeMillis();
     }
 
     public PunchingRemoteConnection(Channel channel, String id) {

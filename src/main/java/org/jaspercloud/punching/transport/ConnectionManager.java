@@ -9,6 +9,7 @@ import org.springframework.beans.factory.InitializingBean;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ConnectionManager implements InitializingBean {
 
@@ -19,10 +20,25 @@ public class ConnectionManager implements InitializingBean {
     @Override
     public void afterPropertiesSet() throws Exception {
 
+//        private void checkHeart() {
+//            long now = System.currentTimeMillis();
+//            long diff = now - pingTime;
+//            if (diff >= 30000) {
+//                active = false;
+//                handler.onInActive(this);
+//            }
+//        }
+
     }
 
-    public void addConnection(PunchingConnection connection) {
-        connectionMap.putIfAbsent(connection.getId(), connection);
+    public boolean addConnection(PunchingConnection connection) {
+        AtomicReference<Boolean> ref = new AtomicReference<>(false);
+        connectionMap.computeIfAbsent(connection.getId(), key -> {
+            ref.set(true);
+            return connection;
+        });
+        Boolean result = ref.get();
+        return result;
     }
 
     public PunchingConnection getConnection(String channelId) {

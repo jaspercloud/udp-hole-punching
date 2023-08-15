@@ -29,8 +29,11 @@ public class PunchingLocalConnection implements PunchingConnection {
     private ChannelPromise promise;
     private ScheduledFuture<?> pingFuture;
     private ScheduledFuture<?> relayPunchingSchedule;
-    private ScheduledFuture<?> checkHeartFuture;
     private volatile long pingTime = System.currentTimeMillis();
+
+    public long getPingTime() {
+        return pingTime;
+    }
 
     public PunchingLocalConnection(PunchingClient punchingClient,
                                    PunchingConnectionHandler handler,
@@ -114,9 +117,6 @@ public class PunchingLocalConnection implements PunchingConnection {
         pingFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
             writePing();
         }, 0, 5000, TimeUnit.MILLISECONDS);
-        checkHeartFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-            checkHeart();
-        }, 0, 30 * 1000, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -127,20 +127,8 @@ public class PunchingLocalConnection implements PunchingConnection {
         if (null != relayPunchingSchedule) {
             relayPunchingSchedule.cancel(true);
         }
-        if (null != checkHeartFuture) {
-            checkHeartFuture.cancel(true);
-        }
         active = false;
         handler.onInActive(this);
-    }
-
-    private void checkHeart() {
-        long now = System.currentTimeMillis();
-        long diff = now - pingTime;
-        if (diff >= 30000) {
-            active = false;
-            handler.onInActive(this);
-        }
     }
 
     private void writePing() {

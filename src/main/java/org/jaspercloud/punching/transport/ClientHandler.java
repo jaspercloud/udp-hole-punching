@@ -33,7 +33,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                     PunchingRemoteConnection connection = new PunchingRemoteConnection(ctx.channel(), heartData.getChannelId());
                     connection.setLocalAddress(recipient);
                     connection.setRemoteAddress(sender);
-                    connectionManager.addConnection(connection);
+                    boolean add = connectionManager.addConnection(connection);
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                             .setType(PunchingProtos.MsgType.PongType)
                             .setReqId(request.getReqId())
@@ -43,6 +43,10 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .message(message)
                             .build();
                     ctx.writeAndFlush(data);
+                    if (!add) {
+                        connection = (PunchingRemoteConnection) connectionManager.getConnection(heartData.getChannelId());
+                        connection.updateHeart();
+                    }
                     break;
                 }
                 case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
