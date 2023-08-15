@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ConnectionManager implements InitializingBean {
@@ -21,16 +22,29 @@ public class ConnectionManager implements InitializingBean {
     }
 
     public void addConnection(PunchingConnection connection) {
-        connectionMap.put(connection.getId(), connection);
+        connectionMap.putIfAbsent(connection.getId(), connection);
     }
 
-    public void channelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
+    public PunchingConnection getConnection(String channelId) {
+        return connectionMap.get(channelId);
+    }
+
+    public boolean channelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
+        boolean read = false;
         for (PunchingConnection connection : connectionMap.values()) {
-            try {
-                connection.onChannelRead(ctx, envelope);
-            } catch (Exception e) {
-                logger.error(e.getMessage(), e);
+            if (connection instanceof PunchingLocalConnection) {
+                try {
+                    PunchingLocalConnection localConnection = (PunchingLocalConnection) connection;
+                    PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(ctx.channel()).get();
+                    if (Objects.equals(envelope.recipient().getPort(), connectionData.getPort())) {
+                        read = true;
+                        localConnection.onChannelRead(ctx, envelope);
+                    }
+                } catch (Exception e) {
+                    logger.error(e.getMessage(), e);
+                }
             }
         }
+        return read;
     }
 }

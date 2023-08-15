@@ -3,15 +3,14 @@ package org.jaspercloud.punching;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
-import io.netty.channel.AddressedEnvelope;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.jaspercloud.punching.transport.Envelope;
 import org.jaspercloud.punching.transport.PunchingClient;
+import org.jaspercloud.punching.transport.PunchingConnection;
+import org.jaspercloud.punching.transport.PunchingConnectionHandler;
 import org.slf4j.impl.StaticLoggerBinder;
 
-import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 
 public class Client1Test {
 
@@ -22,16 +21,11 @@ public class Client1Test {
         Logger punching = loggerContext.getLogger("org.jaspercloud.punching");
         punching.setLevel(Level.DEBUG);
         PunchingClient punchingClient = new PunchingClient("127.0.0.1", 1080, 1001);
-        punchingClient.setConnectionHandler(new SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>>() {
+        punchingClient.setConnectionHandler(new PunchingConnectionHandler() {
             @Override
-            protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) throws Exception {
-                PunchingProtos.PunchingMessage message = msg.message();
-                switch (message.getType().getNumber()) {
-                    case PunchingProtos.MsgType.Data_VALUE: {
-                        System.out.println("msg: " + new String(message.getData().toByteArray()));
-                        break;
-                    }
-                }
+            public void onRead(PunchingConnection connection, byte[] data) {
+                System.out.println("msg: " + new String(data));
+                connection.writeAndFlush(("ack " + new String(data)).getBytes(StandardCharsets.UTF_8));
             }
         });
         punchingClient.afterPropertiesSet();

@@ -23,13 +23,18 @@ message ConnectionData {
   required int32 port = 2;
 }
 
-message Heart {
-  required string channelId = 1;
-}
-
 message PunchingData {
   required string pingHost = 1;
   required int32 pingPort = 2;
   required string pongHost = 3;
   required int32 pongPort = 4;
+}
+
+message HeartData {
+  required string channelId = 1;
+}
+
+message StreamData {
+  required string channelId = 1;
+  required bytes data = 2;
 }

@@ -24,10 +24,16 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
         try {
             Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
             InetSocketAddress sender = envelope.sender();
+            InetSocketAddress recipient = envelope.recipient();
             PunchingProtos.PunchingMessage request = envelope.message();
             switch (request.getType().getNumber()) {
                 case PunchingProtos.MsgType.PingType_VALUE: {
                     logger.debug("recvPing: {}:{}", sender.getHostString(), sender.getPort());
+                    PunchingProtos.HeartData heartData = PunchingProtos.HeartData.parseFrom(request.getData());
+                    PunchingRemoteConnection connection = new PunchingRemoteConnection(ctx.channel(), heartData.getChannelId());
+                    connection.setLocalAddress(recipient);
+                    connection.setRemoteAddress(sender);
+                    connectionManager.addConnection(connection);
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                             .setType(PunchingProtos.MsgType.PongType)
                             .setReqId(request.getReqId())
@@ -57,8 +63,10 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                     break;
                 }
                 default: {
-                    connectionManager.channelRead(ctx, envelope);
-                    super.channelRead(ctx, envelope);
+                    boolean read = connectionManager.channelRead(ctx, envelope);
+                    if (!read) {
+                        super.channelRead(ctx, envelope);
+                    }
                     break;
                 }
             }

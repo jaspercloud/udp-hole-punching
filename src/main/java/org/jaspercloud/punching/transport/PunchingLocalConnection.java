@@ -1,5 +1,6 @@
 package org.jaspercloud.punching.transport;
 
+import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -15,7 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public class PunchingConnectionImpl implements PunchingConnection {
+public class PunchingLocalConnection implements PunchingConnection {
 
     private Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -31,11 +32,11 @@ public class PunchingConnectionImpl implements PunchingConnection {
     private ScheduledFuture<?> checkHeartFuture;
     private volatile long pingTime = System.currentTimeMillis();
 
-    public PunchingConnectionImpl(PunchingClient punchingClient,
-                                  PunchingConnectionHandler handler,
-                                  String id,
-                                  String host,
-                                  int port) {
+    public PunchingLocalConnection(PunchingClient punchingClient,
+                                   PunchingConnectionHandler handler,
+                                   String id,
+                                   String host,
+                                   int port) {
         this.punchingClient = punchingClient;
         this.handler = handler;
         this.id = id;
@@ -54,7 +55,16 @@ public class PunchingConnectionImpl implements PunchingConnection {
     }
 
     @Override
-    public void onChannelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) throws Exception {
+    public InetSocketAddress localAddress() {
+        return new InetSocketAddress(punchingClient.getLocalHost(), punchingClient.getLocalPort());
+    }
+
+    @Override
+    public InetSocketAddress remoteAddress() {
+        return new InetSocketAddress(punchingHost, punchingPort);
+    }
+
+    void onChannelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) throws Exception {
         InetSocketAddress sender = envelope.sender();
         PunchingProtos.PunchingMessage request = envelope.message();
         switch (request.getType().getNumber()) {
@@ -76,8 +86,9 @@ public class PunchingConnectionImpl implements PunchingConnection {
                 punchingPort = port;
                 break;
             }
-            default: {
-                handler.onRead(this, envelope);
+            case PunchingProtos.MsgType.Data_VALUE: {
+                PunchingProtos.StreamData streamData = PunchingProtos.StreamData.parseFrom(request.getData());
+                handler.onRead(this, streamData.getData().toByteArray());
                 break;
             }
         }
@@ -134,9 +145,13 @@ public class PunchingConnectionImpl implements PunchingConnection {
 
     private void writePing() {
         Channel channel = punchingClient.getChannel();
+        PunchingProtos.HeartData heartData = PunchingProtos.HeartData.newBuilder()
+                .setChannelId(id)
+                .build();
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                 .setType(PunchingProtos.MsgType.PingType)
                 .setReqId(UUID.randomUUID().toString())
+                .setData(heartData.toByteString())
                 .build();
         Envelope envelope = Envelope.builder()
                 .recipient(new InetSocketAddress(punchingHost, punchingPort))
@@ -169,10 +184,19 @@ public class PunchingConnectionImpl implements PunchingConnection {
     }
 
     @Override
-    public ChannelFuture writeAndFlush(PunchingProtos.PunchingMessage data) {
+    public ChannelFuture writeAndFlush(byte[] data) {
+        PunchingProtos.StreamData streamData = PunchingProtos.StreamData.newBuilder()
+                .setChannelId(id)
+                .setData(ByteString.copyFrom(data))
+                .build();
+        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setType(PunchingProtos.MsgType.Data)
+                .setReqId(UUID.randomUUID().toString())
+                .setData(streamData.toByteString())
+                .build();
         Envelope<PunchingProtos.PunchingMessage> envelope = Envelope.<PunchingProtos.PunchingMessage>builder()
                 .recipient(new InetSocketAddress(punchingHost, punchingPort))
-                .message(data)
+                .message(message)
                 .build();
         InetSocketAddress recipient = envelope.recipient();
         logger.debug("sendData: {}:{}", recipient.getHostString(), recipient.getPort());

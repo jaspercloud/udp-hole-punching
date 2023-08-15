@@ -1,16 +1,14 @@
 package org.jaspercloud.punching;
 
-import com.google.protobuf.ByteString;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
-import org.jaspercloud.punching.proto.PunchingProtos;
-import org.jaspercloud.punching.transport.*;
+import org.jaspercloud.punching.transport.PunchingClient;
+import org.jaspercloud.punching.transport.PunchingConnection;
+import org.jaspercloud.punching.transport.PunchingConnectionHandler;
+import org.jaspercloud.punching.transport.PunchingServer;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 
 @SpringBootApplication
 public class UdpHolePunchingApplication {
@@ -31,22 +29,16 @@ public class UdpHolePunchingApplication {
 //        "127.0.0.1", 1080
 //        "47.122.65.163", 1080
         PunchingClient punchingClient = new PunchingClient("47.122.65.163", 1080, 0);
-        punchingClient.setConnectionHandler(new SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>>() {
+        punchingClient.setConnectionHandler(new PunchingConnectionHandler() {
             @Override
-            protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) throws Exception {
-                PunchingProtos.PunchingMessage message = msg.message();
-                switch (message.getType().getNumber()) {
-                    case PunchingProtos.MsgType.Data_VALUE: {
-                        System.out.println("msg: " + new String(message.getData().toByteArray()));
-                        break;
-                    }
-                }
+            public void onRead(PunchingConnection connection, byte[] data) {
+                System.out.println("msg: " + new String(data));
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 63184, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 52102, new PunchingConnectionHandler() {
             @Override
-            public void onRead(PunchingConnection connection, Envelope<PunchingProtos.PunchingMessage> envelope) {
+            public void onRead(PunchingConnection connection, byte[] data) {
                 System.out.println("onRead");
             }
         });
@@ -55,12 +47,7 @@ public class UdpHolePunchingApplication {
         while (true) {
             boolean active = connection.isActive();
             System.out.println("connectStatus: " + active);
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setType(PunchingProtos.MsgType.Data)
-                    .setReqId(UUID.randomUUID().toString())
-                    .setData(ByteString.copyFrom("hello".getBytes(StandardCharsets.UTF_8)))
-                    .build();
-            connection.writeAndFlush(message);
+            connection.writeAndFlush("hello".getBytes(StandardCharsets.UTF_8));
             Thread.sleep(1000L);
         }
     }

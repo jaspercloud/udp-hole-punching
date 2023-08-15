@@ -15,10 +15,11 @@ public class PunchingClient implements InitializingBean {
 
     private String serverHost;
     private int serverPort;
+    private String localHost = "0.0.0.0";
     private int localPort;
     private Channel channel;
     private ConnectionManager connectionManager;
-    private SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> connectionHandler;
+    private PunchingConnectionHandler connectionHandler;
 
     public String getServerHost() {
         return serverHost;
@@ -28,11 +29,19 @@ public class PunchingClient implements InitializingBean {
         return serverPort;
     }
 
+    public String getLocalHost() {
+        return localHost;
+    }
+
+    public int getLocalPort() {
+        return localPort;
+    }
+
     public Channel getChannel() {
         return channel;
     }
 
-    public void setConnectionHandler(SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> connectionHandler) {
+    public void setConnectionHandler(PunchingConnectionHandler connectionHandler) {
         this.connectionHandler = connectionHandler;
     }
 
@@ -51,22 +60,36 @@ public class PunchingClient implements InitializingBean {
         connectionManager = new ConnectionManager();
         connectionManager.afterPropertiesSet();
         InetSocketAddress serverAddress = new InetSocketAddress(serverHost, serverPort);
-        InetSocketAddress local = new InetSocketAddress("0.0.0.0", localPort);
+        InetSocketAddress local = new InetSocketAddress(localHost, localPort);
         NioEventLoopGroup group = new NioEventLoopGroup();
         Bootstrap bootstrap = new Bootstrap();
-        bootstrap.group(group)
-                .channel(NioDatagramChannel.class)
-                .handler(new ChannelInitializer<DatagramChannel>() {
+        bootstrap.group(group);
+        bootstrap.channel(NioDatagramChannel.class);
+        bootstrap.handler(new ChannelInitializer<DatagramChannel>() {
+            @Override
+            protected void initChannel(DatagramChannel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("decoder", new Decoder());
+                pipeline.addLast("encoder", new Encoder());
+                pipeline.addLast("register", new RegisterHandler(serverAddress));
+                pipeline.addLast("client", new ClientHandler(connectionManager));
+                pipeline.addLast("connection", new ChannelInboundHandlerAdapter() {
                     @Override
-                    protected void initChannel(DatagramChannel ch) throws Exception {
-                        ChannelPipeline pipeline = ch.pipeline();
-                        pipeline.addLast("decoder", new Decoder());
-                        pipeline.addLast("encoder", new Encoder());
-                        pipeline.addLast("register", new RegisterHandler(serverAddress));
-                        pipeline.addLast("client", new ClientHandler(connectionManager));
-                        pipeline.addLast("connection", connectionHandler);
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+                        Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+                        PunchingProtos.PunchingMessage message = envelope.message();
+                        switch (message.getType().getNumber()) {
+                            case PunchingProtos.MsgType.Data_VALUE: {
+                                PunchingProtos.StreamData streamData = PunchingProtos.StreamData.parseFrom(message.getData());
+                                PunchingConnection connection = connectionManager.getConnection(streamData.getChannelId());
+                                connectionHandler.onRead(connection, streamData.getData().toByteArray());
+                                break;
+                            }
+                        }
                     }
                 });
+            }
+        });
         channel = bootstrap.bind(local).sync().channel();
         channel.closeFuture().addListener(new ChannelFutureListener() {
             @Override
@@ -78,7 +101,7 @@ public class PunchingClient implements InitializingBean {
 
     public PunchingConnection createConnection(String host, int port, PunchingConnectionHandler handler) {
         String id = UUID.randomUUID().toString();
-        PunchingConnection connection = new PunchingConnectionImpl(this, handler, id, host, port);
+        PunchingLocalConnection connection = new PunchingLocalConnection(this, handler, id, host, port);
         connectionManager.addConnection(connection);
         return connection;
     }
