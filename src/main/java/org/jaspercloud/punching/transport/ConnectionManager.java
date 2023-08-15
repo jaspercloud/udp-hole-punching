@@ -53,9 +53,9 @@ public class ConnectionManager implements InitializingBean {
     public boolean channelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
         boolean read = false;
         for (PunchingConnection connection : connectionMap.values()) {
-            if (connection instanceof PunchingLocalConnection) {
+            if (connection instanceof PunchingClientConnection) {
                 try {
-                    PunchingLocalConnection localConnection = (PunchingLocalConnection) connection;
+                    PunchingClientConnection localConnection = (PunchingClientConnection) connection;
                     if (StringUtils.equals(localConnection.getId(), envelope.message().getChannelId())) {
                         read = true;
                         localConnection.onChannelRead(ctx, envelope);

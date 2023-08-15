@@ -30,7 +30,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
             switch (request.getType().getNumber()) {
                 case PunchingProtos.MsgType.PingType_VALUE: {
                     logger.debug("recvPing: {}:{}", sender.getHostString(), sender.getPort());
-                    PunchingRemoteConnection connection = new PunchingRemoteConnection(ctx.channel(), request.getChannelId());
+                    PunchingServerConnection connection = new PunchingServerConnection(ctx.channel(), request.getChannelId());
                     connection.setLocalAddress(recipient);
                     connection.setRemoteAddress(sender);
                     boolean add = connectionManager.addConnection(connection);
@@ -45,7 +45,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .build();
                     ctx.writeAndFlush(data);
                     if (!add) {
-                        connection = (PunchingRemoteConnection) connectionManager.getConnection(request.getChannelId());
+                        connection = (PunchingServerConnection) connectionManager.getConnection(request.getChannelId());
                         connection.updateHeart();
                     }
                     break;
@@ -54,7 +54,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                     String host = sender.getHostString();
                     int port = sender.getPort();
                     logger.debug("recvPong: {}:{}", host, port);
-                    PunchingLocalConnection connection = (PunchingLocalConnection) connectionManager.getConnection(request.getChannelId());
+                    PunchingClientConnection connection = (PunchingClientConnection) connectionManager.getConnection(request.getChannelId());
                     connection.active();
                     break;
                 }
@@ -80,7 +80,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                     String host = sender.getHostString();
                     int port = sender.getPort();
                     logger.debug("recvRespPunching: {}:{}", host, port);
-                    PunchingLocalConnection connection = (PunchingLocalConnection) connectionManager.getConnection(request.getChannelId());
+                    PunchingClientConnection connection = (PunchingClientConnection) connectionManager.getConnection(request.getChannelId());
                     connection.updatePunchingPort(port);
                     break;
                 }

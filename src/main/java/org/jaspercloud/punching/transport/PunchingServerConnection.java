@@ -10,7 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-public class PunchingRemoteConnection implements PunchingConnection {
+public class PunchingServerConnection implements PunchingConnection {
 
     private Channel channel;
     private String id;
@@ -30,7 +30,7 @@ public class PunchingRemoteConnection implements PunchingConnection {
         pingTime = System.currentTimeMillis();
     }
 
-    public PunchingRemoteConnection(Channel channel, String id) {
+    public PunchingServerConnection(Channel channel, String id) {
         this.channel = channel;
         this.id = id;
     }

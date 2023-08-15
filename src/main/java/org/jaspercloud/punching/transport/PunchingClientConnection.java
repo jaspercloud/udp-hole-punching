@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public class PunchingLocalConnection implements PunchingConnection {
+public class PunchingClientConnection implements PunchingConnection {
 
     private Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -31,11 +31,11 @@ public class PunchingLocalConnection implements PunchingConnection {
     private ScheduledFuture<?> relayPunchingSchedule;
     private volatile long pingTime = System.currentTimeMillis();
 
-    public PunchingLocalConnection(PunchingClient punchingClient,
-                                   PunchingConnectionHandler handler,
-                                   String id,
-                                   String host,
-                                   int port) {
+    public PunchingClientConnection(PunchingClient punchingClient,
+                                    PunchingConnectionHandler handler,
+                                    String id,
+                                    String host,
+                                    int port) {
         this.punchingClient = punchingClient;
         this.handler = handler;
         this.id = id;

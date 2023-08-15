@@ -100,7 +100,7 @@ public class PunchingClient implements InitializingBean {
 
     public PunchingConnection createConnection(String host, int port, PunchingConnectionHandler handler) {
         String id = UUID.randomUUID().toString();
-        PunchingLocalConnection connection = new PunchingLocalConnection(this, handler, id, host, port);
+        PunchingClientConnection connection = new PunchingClientConnection(this, handler, id, host, port);
         connectionManager.addConnection(connection);
         return connection;
     }

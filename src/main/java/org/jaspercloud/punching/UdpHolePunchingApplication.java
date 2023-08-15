@@ -16,8 +16,8 @@ public class UdpHolePunchingApplication {
     public static void main(String[] args) throws Exception {
         new SpringApplicationBuilder(UdpHolePunchingApplication.class)
                 .web(WebApplicationType.NONE).run(args);
-        startServer();
-//        startClient();
+//        startServer();
+        startClient();
     }
 
     private static void startServer() throws Exception {
@@ -37,7 +37,7 @@ public class UdpHolePunchingApplication {
             }
         });
         punchingClient.afterPropertiesSet();
-        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 57760, new PunchingConnectionHandler() {
+        PunchingConnection connection = punchingClient.createConnection("61.174.208.54", 61653, new PunchingConnectionHandler() {
             @Override
             public void onRead(PunchingConnection connection, byte[] data) {
                 System.out.println("msg: " + new String(data));
