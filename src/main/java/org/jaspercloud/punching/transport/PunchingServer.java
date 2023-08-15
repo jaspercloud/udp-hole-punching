@@ -1,19 +1,14 @@
 package org.jaspercloud.punching.transport;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
-import org.jaspercloud.punching.exception.ParseException;
-import org.jaspercloud.punching.proto.PunchingProtos;
+import org.jaspercloud.punching.transport.server.ServerHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
-
-import java.net.InetSocketAddress;
-import java.util.UUID;
 
 public class PunchingServer implements InitializingBean {
 
@@ -37,22 +32,7 @@ public class PunchingServer implements InitializingBean {
                         ChannelPipeline pipeline = ch.pipeline();
                         pipeline.addLast("decoder", new Decoder());
                         pipeline.addLast("encoder", new Encoder());
-                        pipeline.addLast(new SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>>() {
-                            @Override
-                            protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) {
-                                PunchingProtos.PunchingMessage request = msg.message();
-                                switch (request.getType().getNumber()) {
-                                    case PunchingProtos.MsgType.ReqRegisterType_VALUE: {
-                                        processRegister(ctx, msg);
-                                        break;
-                                    }
-                                    case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
-                                        processRelayPunching(ctx, msg);
-                                        break;
-                                    }
-                                }
-                            }
-                        });
+                        pipeline.addLast("server", new ServerHandler());
                     }
                 });
         Channel channel = bootstrap.bind(port).sync().channel();
@@ -62,43 +42,5 @@ public class PunchingServer implements InitializingBean {
                 group.shutdownGracefully();
             }
         });
-    }
-
-    private void processRegister(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
-        InetSocketAddress sender = envelope.sender();
-        String host = sender.getHostString();
-        int port = sender.getPort();
-        logger.debug("register: {}:{}", host, port);
-        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                .setChannelId(ctx.channel().id().asLongText())
-                .setType(PunchingProtos.MsgType.RespRegisterType)
-                .setReqId(UUID.randomUUID().toString())
-                .setData(PunchingProtos.ConnectionData.newBuilder()
-                        .setHost(host)
-                        .setPort(port)
-                        .build().toByteString())
-                .build();
-        Envelope data = Envelope.builder()
-                .recipient(sender)
-                .message(message)
-                .build();
-        ctx.writeAndFlush(data);
-    }
-
-    private void processRelayPunching(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
-        try {
-            PunchingProtos.PunchingMessage message = envelope.message();
-            PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(message.getData());
-            logger.debug("relayPunching: {}:{} -> {}:{}",
-                    punchingData.getPingHost(), punchingData.getPingPort(),
-                    punchingData.getPongHost(), punchingData.getPongPort());
-            Envelope data = Envelope.builder()
-                    .recipient(new InetSocketAddress(punchingData.getPongHost(), punchingData.getPongPort()))
-                    .message(message)
-                    .build();
-            ctx.writeAndFlush(data);
-        } catch (InvalidProtocolBufferException e) {
-            throw new ParseException(e.getMessage(), e);
-        }
     }
 }
