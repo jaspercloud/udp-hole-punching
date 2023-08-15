@@ -16,6 +16,8 @@ public interface PunchingConnection {
 
     InetSocketAddress remoteAddress();
 
+    long getPingTime();
+
     void connect(long timeout) throws TimeoutException, ExecutionException, InterruptedException;
 
     void close();

@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,16 +20,20 @@ public class ConnectionManager implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
-
-//        private void checkHeart() {
-//            long now = System.currentTimeMillis();
-//            long diff = now - pingTime;
-//            if (diff >= 30000) {
-//                active = false;
-//                handler.onInActive(this);
-//            }
-//        }
-
+        new Thread(() -> {
+            while (true) {
+                Iterator<PunchingConnection> iterator = connectionMap.values().iterator();
+                while (iterator.hasNext()) {
+                    PunchingConnection next = iterator.next();
+                    long now = System.currentTimeMillis();
+                    long diff = now - next.getPingTime();
+                    if (diff >= 30000) {
+                        next.close();
+                        iterator.remove();
+                    }
+                }
+            }
+        }).start();
     }
 
     public boolean addConnection(PunchingConnection connection) {

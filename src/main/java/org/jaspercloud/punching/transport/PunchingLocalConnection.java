@@ -31,10 +31,6 @@ public class PunchingLocalConnection implements PunchingConnection {
     private ScheduledFuture<?> relayPunchingSchedule;
     private volatile long pingTime = System.currentTimeMillis();
 
-    public long getPingTime() {
-        return pingTime;
-    }
-
     public PunchingLocalConnection(PunchingClient punchingClient,
                                    PunchingConnectionHandler handler,
                                    String id,
@@ -55,6 +51,11 @@ public class PunchingLocalConnection implements PunchingConnection {
     @Override
     public boolean isActive() {
         return active;
+    }
+
+    @Override
+    public long getPingTime() {
+        return pingTime;
     }
 
     @Override

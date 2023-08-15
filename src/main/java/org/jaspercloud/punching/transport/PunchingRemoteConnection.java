@@ -26,10 +26,6 @@ public class PunchingRemoteConnection implements PunchingConnection {
         this.remoteAddress = remoteAddress;
     }
 
-    public long getPingTime() {
-        return pingTime;
-    }
-
     public void updateHeart() {
         pingTime = System.currentTimeMillis();
     }
@@ -47,6 +43,11 @@ public class PunchingRemoteConnection implements PunchingConnection {
     @Override
     public boolean isActive() {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long getPingTime() {
+        return pingTime;
     }
 
     @Override
