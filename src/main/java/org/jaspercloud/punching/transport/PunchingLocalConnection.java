@@ -68,31 +68,23 @@ public class PunchingLocalConnection implements PunchingConnection {
         return new InetSocketAddress(punchingHost, punchingPort);
     }
 
+    void active() {
+        active = true;
+        pingTime = System.currentTimeMillis();
+        if (!promise.isDone()) {
+            promise.setSuccess();
+        }
+    }
+
+    void updatePunchingPort(int port) {
+        punchingPort = port;
+    }
+
     void onChannelRead(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) throws Exception {
-        InetSocketAddress sender = envelope.sender();
         PunchingProtos.PunchingMessage request = envelope.message();
         switch (request.getType().getNumber()) {
-            case PunchingProtos.MsgType.PongType_VALUE: {
-                String host = sender.getHostString();
-                int port = sender.getPort();
-                logger.debug("recvPong: {}:{}", host, port);
-                active = true;
-                pingTime = System.currentTimeMillis();
-                if (!promise.isDone()) {
-                    promise.setSuccess();
-                }
-                break;
-            }
-            case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
-                String host = sender.getHostString();
-                int port = sender.getPort();
-                logger.debug("recvRespPunching: {}:{}", host, port);
-                punchingPort = port;
-                break;
-            }
             case PunchingProtos.MsgType.Data_VALUE: {
-                PunchingProtos.StreamData streamData = PunchingProtos.StreamData.parseFrom(request.getData());
-                handler.onRead(this, streamData.getData().toByteArray());
+                handler.onRead(this, request.getData().toByteArray());
                 break;
             }
         }
@@ -134,13 +126,10 @@ public class PunchingLocalConnection implements PunchingConnection {
 
     private void writePing() {
         Channel channel = punchingClient.getChannel();
-        PunchingProtos.HeartData heartData = PunchingProtos.HeartData.newBuilder()
-                .setChannelId(id)
-                .build();
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setChannelId(id)
                 .setType(PunchingProtos.MsgType.PingType)
                 .setReqId(UUID.randomUUID().toString())
-                .setData(heartData.toByteString())
                 .build();
         Envelope envelope = Envelope.builder()
                 .recipient(new InetSocketAddress(punchingHost, punchingPort))
@@ -160,6 +149,7 @@ public class PunchingLocalConnection implements PunchingConnection {
                 .setPongPort(punchingPort)
                 .build();
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setChannelId(id)
                 .setType(PunchingProtos.MsgType.ReqRelayPunchingType)
                 .setReqId(UUID.randomUUID().toString())
                 .setData(punchingData.toByteString())
@@ -174,14 +164,11 @@ public class PunchingLocalConnection implements PunchingConnection {
 
     @Override
     public ChannelFuture writeAndFlush(byte[] data) {
-        PunchingProtos.StreamData streamData = PunchingProtos.StreamData.newBuilder()
-                .setChannelId(id)
-                .setData(ByteString.copyFrom(data))
-                .build();
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setChannelId(id)
                 .setType(PunchingProtos.MsgType.Data)
                 .setReqId(UUID.randomUUID().toString())
-                .setData(streamData.toByteString())
+                .setData(ByteString.copyFrom(data))
                 .build();
         Envelope<PunchingProtos.PunchingMessage> envelope = Envelope.<PunchingProtos.PunchingMessage>builder()
                 .recipient(new InetSocketAddress(punchingHost, punchingPort))

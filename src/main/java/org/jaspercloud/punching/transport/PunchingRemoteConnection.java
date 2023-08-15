@@ -72,14 +72,11 @@ public class PunchingRemoteConnection implements PunchingConnection {
 
     @Override
     public ChannelFuture writeAndFlush(byte[] data) {
-        PunchingProtos.StreamData streamData = PunchingProtos.StreamData.newBuilder()
-                .setChannelId(id)
-                .setData(ByteString.copyFrom(data))
-                .build();
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setChannelId(id)
                 .setType(PunchingProtos.MsgType.Data)
                 .setReqId(UUID.randomUUID().toString())
-                .setData(streamData.toByteString())
+                .setData(ByteString.copyFrom(data))
                 .build();
         Envelope envelope = Envelope.builder()
                 .recipient(remoteAddress)

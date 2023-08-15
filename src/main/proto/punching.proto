@@ -13,9 +13,10 @@ enum MsgType {
 }
 
 message PunchingMessage {
-  required MsgType type = 1;
-  required string reqId = 2;
-  optional bytes data = 3;
+  required string channelId = 1;
+  required MsgType type = 2;
+  required string reqId = 3;
+  optional bytes data = 4;
 }
 
 message ConnectionData {
@@ -28,13 +29,4 @@ message PunchingData {
   required int32 pingPort = 2;
   required string pongHost = 3;
   required int32 pongPort = 4;
-}
-
-message HeartData {
-  required string channelId = 1;
-}
-
-message StreamData {
-  required string channelId = 1;
-  required bytes data = 2;
 }

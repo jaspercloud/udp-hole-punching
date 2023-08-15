@@ -1,6 +1,7 @@
 package org.jaspercloud.punching.transport;
 
 import io.netty.channel.ChannelHandlerContext;
+import org.apache.commons.lang3.StringUtils;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,7 +9,6 @@ import org.springframework.beans.factory.InitializingBean;
 
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -56,8 +56,7 @@ public class ConnectionManager implements InitializingBean {
             if (connection instanceof PunchingLocalConnection) {
                 try {
                     PunchingLocalConnection localConnection = (PunchingLocalConnection) connection;
-                    PunchingProtos.ConnectionData connectionData = (PunchingProtos.ConnectionData) AttributeKeyUtil.connectionData(ctx.channel()).get();
-                    if (Objects.equals(envelope.recipient().getPort(), connectionData.getPort())) {
+                    if (StringUtils.equals(localConnection.getId(), envelope.message().getChannelId())) {
                         read = true;
                         localConnection.onChannelRead(ctx, envelope);
                     }

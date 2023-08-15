@@ -70,6 +70,7 @@ public class PunchingServer implements InitializingBean {
         int port = sender.getPort();
         logger.debug("register: {}:{}", host, port);
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                .setChannelId(ctx.channel().id().asLongText())
                 .setType(PunchingProtos.MsgType.RespRegisterType)
                 .setReqId(UUID.randomUUID().toString())
                 .setData(PunchingProtos.ConnectionData.newBuilder()

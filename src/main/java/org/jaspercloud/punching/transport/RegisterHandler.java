@@ -37,6 +37,7 @@ public class RegisterHandler extends ChannelDuplexHandler {
                 Channel channel = ctx.channel();
                 channel.eventLoop().scheduleAtFixedRate(() -> {
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                            .setChannelId(ctx.channel().id().asLongText())
                             .setType(PunchingProtos.MsgType.ReqRegisterType)
                             .setReqId(UUID.randomUUID().toString())
                             .build();

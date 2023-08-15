@@ -26,15 +26,16 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
             InetSocketAddress sender = envelope.sender();
             InetSocketAddress recipient = envelope.recipient();
             PunchingProtos.PunchingMessage request = envelope.message();
+            logger.info("recvType: type={}, channel={}:{}", request.getType().toString(), sender.getHostString(), sender.getPort());
             switch (request.getType().getNumber()) {
                 case PunchingProtos.MsgType.PingType_VALUE: {
                     logger.debug("recvPing: {}:{}", sender.getHostString(), sender.getPort());
-                    PunchingProtos.HeartData heartData = PunchingProtos.HeartData.parseFrom(request.getData());
-                    PunchingRemoteConnection connection = new PunchingRemoteConnection(ctx.channel(), heartData.getChannelId());
+                    PunchingRemoteConnection connection = new PunchingRemoteConnection(ctx.channel(), request.getChannelId());
                     connection.setLocalAddress(recipient);
                     connection.setRemoteAddress(sender);
                     boolean add = connectionManager.addConnection(connection);
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                            .setChannelId(request.getChannelId())
                             .setType(PunchingProtos.MsgType.PongType)
                             .setReqId(request.getReqId())
                             .build();
@@ -44,9 +45,17 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .build();
                     ctx.writeAndFlush(data);
                     if (!add) {
-                        connection = (PunchingRemoteConnection) connectionManager.getConnection(heartData.getChannelId());
+                        connection = (PunchingRemoteConnection) connectionManager.getConnection(request.getChannelId());
                         connection.updateHeart();
                     }
+                    break;
+                }
+                case PunchingProtos.MsgType.PongType_VALUE: {
+                    String host = sender.getHostString();
+                    int port = sender.getPort();
+                    logger.debug("recvPong: {}:{}", host, port);
+                    PunchingLocalConnection connection = (PunchingLocalConnection) connectionManager.getConnection(request.getChannelId());
+                    connection.active();
                     break;
                 }
                 case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
@@ -55,6 +64,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             punchingData.getPingHost(), punchingData.getPingPort(),
                             punchingData.getPongHost(), punchingData.getPongPort());
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                            .setChannelId(request.getChannelId())
                             .setType(PunchingProtos.MsgType.RespRelayPunchingType)
                             .setReqId(request.getReqId())
                             .build();
@@ -64,6 +74,14 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             .message(message)
                             .build();
                     ctx.writeAndFlush(data);
+                    break;
+                }
+                case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
+                    String host = sender.getHostString();
+                    int port = sender.getPort();
+                    logger.debug("recvRespPunching: {}:{}", host, port);
+                    PunchingLocalConnection connection = (PunchingLocalConnection) connectionManager.getConnection(request.getChannelId());
+                    connection.updatePunchingPort(port);
                     break;
                 }
                 default: {

@@ -80,9 +80,8 @@ public class PunchingClient implements InitializingBean {
                         PunchingProtos.PunchingMessage message = envelope.message();
                         switch (message.getType().getNumber()) {
                             case PunchingProtos.MsgType.Data_VALUE: {
-                                PunchingProtos.StreamData streamData = PunchingProtos.StreamData.parseFrom(message.getData());
-                                PunchingConnection connection = connectionManager.getConnection(streamData.getChannelId());
-                                connectionHandler.onRead(connection, streamData.getData().toByteArray());
+                                PunchingConnection connection = connectionManager.getConnection(message.getChannelId());
+                                connectionHandler.onRead(connection, message.getData().toByteArray());
                                 break;
                             }
                         }
