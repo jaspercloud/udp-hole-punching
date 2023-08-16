@@ -14,9 +14,10 @@ enum MsgType {
 
 message PunchingMessage {
   required string channelId = 1;
-  required MsgType type = 2;
-  required string reqId = 3;
-  optional bytes data = 4;
+  optional string streamId = 2;
+  required MsgType type = 3;
+  required string reqId = 4;
+  optional bytes data = 5;
 }
 
 message ConnectionData {

@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.UUID;
 
 public class ServerHandler extends SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> {
 
@@ -32,14 +31,15 @@ public class ServerHandler extends SimpleChannelInboundHandler<Envelope<Punching
     }
 
     private void processRegister(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> envelope) {
+        PunchingProtos.PunchingMessage request = envelope.message();
         InetSocketAddress sender = envelope.sender();
         String host = sender.getHostString();
         int port = sender.getPort();
         logger.debug("recvRegister: {}:{}", host, port);
         PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                .setChannelId(ctx.channel().id().asLongText())
+                .setChannelId(request.getChannelId())
                 .setType(PunchingProtos.MsgType.RespRegisterType)
-                .setReqId(UUID.randomUUID().toString())
+                .setReqId(request.getReqId())
                 .setData(PunchingProtos.ConnectionData.newBuilder()
                         .setHost(host)
                         .setPort(port)

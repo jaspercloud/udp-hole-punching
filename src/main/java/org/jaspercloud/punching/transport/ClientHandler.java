@@ -36,6 +36,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                     boolean add = connectionManager.addConnection(connection);
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                             .setChannelId(request.getChannelId())
+                            .setStreamId(request.getStreamId())
                             .setType(PunchingProtos.MsgType.PongType)
                             .setReqId(request.getReqId())
                             .build();
@@ -65,6 +66,7 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
                             punchingData.getPongHost(), punchingData.getPongPort());
                     PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                             .setChannelId(request.getChannelId())
+                            .setStreamId(request.getStreamId())
                             .setType(PunchingProtos.MsgType.RespRelayPunchingType)
                             .setReqId(request.getReqId())
                             .build();
