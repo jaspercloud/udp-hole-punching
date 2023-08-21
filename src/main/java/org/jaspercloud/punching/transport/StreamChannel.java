@@ -65,7 +65,7 @@ public class StreamChannel extends BusChannel {
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast("ping", new PingHandler(parent, streamChannel));
+                ch.pipeline().addLast("ping", new PingHandler(parent));
                 ch.pipeline().addLast("stream", new StreamHandler(parent));
             }
         });
@@ -76,11 +76,9 @@ public class StreamChannel extends BusChannel {
     private static class PingHandler extends ChannelDuplexHandler {
 
         private TunnelChannel parent;
-        private StreamChannel streamChannel;
 
-        public PingHandler(TunnelChannel parent, StreamChannel streamChannel) {
+        public PingHandler(TunnelChannel parent) {
             this.parent = parent;
-            this.streamChannel = streamChannel;
         }
 
         @Override

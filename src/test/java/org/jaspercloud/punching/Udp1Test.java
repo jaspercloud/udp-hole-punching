@@ -22,7 +22,7 @@ public class Udp1Test {
         punching.setLevel(Level.DEBUG);
         Channel channel = UdpChannel.create(1001).sync().channel();
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
-        tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080));
+        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080));
         CountDownLatch countDownLatch = new CountDownLatch(1);
         countDownLatch.await();
     }

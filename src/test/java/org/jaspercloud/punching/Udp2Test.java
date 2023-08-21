@@ -22,9 +22,9 @@ public class Udp2Test {
         punching.setLevel(Level.DEBUG);
         Channel channel = UdpChannel.create(1002).sync().channel();
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
-        tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync();
+        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync().channel();
         Channel streamChannel = StreamChannel.createClient(tunnelChannel).sync().channel();
-        streamChannel.connect(new InetSocketAddress("127.0.0.1", 1001));
+        streamChannel.connect(new InetSocketAddress("61.174.208.54", 1001));
         CountDownLatch countDownLatch = new CountDownLatch(1);
         countDownLatch.await();
     }

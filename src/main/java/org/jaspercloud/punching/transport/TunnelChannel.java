@@ -158,7 +158,6 @@ public class TunnelChannel extends BusChannel {
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
             PunchingProtos.PunchingMessage request = envelope.message();
-            System.out.println("request: " + request.getType().toString());
             switch (request.getType().getNumber()) {
                 case PunchingProtos.MsgType.RespRegisterType_VALUE: {
                     PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
