@@ -4,8 +4,12 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import io.netty.channel.Channel;
-import org.jaspercloud.punching.transport.StreamChannel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
+import org.jaspercloud.punching.transport.StreamChannelManager;
 import org.jaspercloud.punching.transport.TunnelChannel;
+import org.jaspercloud.punching.transport.TunnelChannelManager;
 import org.jaspercloud.punching.transport.UdpChannel;
 import org.slf4j.impl.StaticLoggerBinder;
 
@@ -20,9 +24,35 @@ public class Udp1Test {
         root.setLevel(Level.INFO);
         Logger punching = loggerContext.getLogger("org.jaspercloud.punching");
         punching.setLevel(Level.DEBUG);
-        Channel channel = UdpChannel.create(1001).sync().channel();
+
+        StreamChannelManager streamChannelManager = new StreamChannelManager(new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+                        Channel channel = ctx.channel();
+                        byte[] bytes = (byte[]) msg;
+                        String text = new String(bytes);
+                        System.out.println(String.format("%s->%s: %s", channel.remoteAddress(), channel.localAddress(), text));
+                        ctx.writeAndFlush("say");
+                    }
+                });
+            }
+        });
+        TunnelChannelManager tunnelChannelManager = new TunnelChannelManager(new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast(streamChannelManager);
+            }
+        });
+
+        Channel channel = UdpChannel.create(1001);
+        channel.pipeline().addLast(tunnelChannelManager);
+
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
-        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080));
+        tunnelChannelManager.addTunnelChannel(tunnelChannel);
+        tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync().channel();
         CountDownLatch countDownLatch = new CountDownLatch(1);
         countDownLatch.await();
     }

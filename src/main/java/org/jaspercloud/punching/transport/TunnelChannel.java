@@ -1,16 +1,13 @@
 package org.jaspercloud.punching.transport;
 
 import io.netty.channel.*;
-import org.apache.commons.lang3.StringUtils;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -18,25 +15,10 @@ public class TunnelChannel extends BusChannel {
 
     private static Logger logger = LoggerFactory.getLogger(TunnelChannel.class);
 
-    private static Map<String, TunnelChannel> TunnelMap = new ConcurrentHashMap<>();
-    private static Map<String, StreamChannel> StreamMap = new ConcurrentHashMap<>();
-
     private PunchingProtos.ConnectionData connectionData;
-    private SocketAddress remoteAddress;
 
     public PunchingProtos.ConnectionData getConnectionData() {
         return connectionData;
-    }
-
-    public void addStreamChannel(StreamChannel channel) {
-        channel.closeFuture().addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                Channel channel = future.channel();
-                StreamMap.remove(channel.id().asLongText());
-            }
-        });
-        StreamMap.put(channel.id().asLongText(), channel);
     }
 
     @Override
@@ -44,44 +26,36 @@ public class TunnelChannel extends BusChannel {
         return parent().localAddress();
     }
 
-    @Override
-    public SocketAddress remoteAddress() {
-        return remoteAddress;
-    }
-
     private TunnelChannel(Channel channel) {
         super(channel);
     }
 
-    public static SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> createHandler() {
-        SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> handler = new SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>>() {
+    private TunnelChannel(Channel channel, ChannelId channelId) {
+        super(channel, channelId);
+    }
+
+    public static TunnelChannel create(Channel parent, String channelId, ChannelInitializer<Channel> initializer) throws InterruptedException {
+        TunnelChannel tunnelChannel = new TunnelChannel(parent, new RemoteChannelId(channelId));
+        tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
-            protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) throws Exception {
-                PunchingProtos.PunchingMessage request = msg.message();
-                TunnelChannel tunnelChannel = TunnelMap.get(request.getChannelId());
-                if (null == tunnelChannel) {
-                    tunnelChannel = TunnelChannel.create(ctx.channel());
-                }
-                tunnelChannel.receive(msg);
+            protected void initChannel(Channel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("tunnel", new TunnelHandler(tunnelChannel));
+                pipeline.addLast(initializer);
             }
-        };
-        return handler;
+        });
+        parent.eventLoop().register(tunnelChannel).sync();
+        return tunnelChannel;
     }
 
     public static TunnelChannel create(Channel parent) throws InterruptedException {
         TunnelChannel tunnelChannel = new TunnelChannel(parent);
-        TunnelMap.put(tunnelChannel.id().asLongText(), tunnelChannel);
-        tunnelChannel.closeFuture().addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                TunnelMap.remove(tunnelChannel.id().asLongText());
-            }
-        });
         tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast("registerReq", new RegisterReqHandler(parent, tunnelChannel));
-                ch.pipeline().addLast("tunnel", new TunnelHandler(parent, tunnelChannel));
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("registerReq", new RegisterReqHandler(parent, tunnelChannel));
+                pipeline.addLast("tunnel", new TunnelHandler(tunnelChannel));
             }
         });
         parent.eventLoop().register(tunnelChannel).sync();
@@ -91,6 +65,46 @@ public class TunnelChannel extends BusChannel {
     @Override
     public ChannelFuture writeAndFlush(Object msg) {
         return parent().writeAndFlush(msg);
+    }
+
+    private static class TunnelHandler extends ChannelInboundHandlerAdapter {
+
+        private TunnelChannel tunnelChannel;
+
+        public TunnelHandler(TunnelChannel tunnelChannel) {
+            this.tunnelChannel = tunnelChannel;
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+            PunchingProtos.PunchingMessage request = envelope.message();
+            switch (request.getType().getNumber()) {
+                case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
+                    PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
+                    logger.debug("recvReqPunching: {}:{} -> {}:{}",
+                            punchingData.getPingHost(), punchingData.getPingPort(),
+                            punchingData.getPongHost(), punchingData.getPongPort());
+                    PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                            .setChannelId(request.getChannelId())
+                            .setStreamId(request.getStreamId())
+                            .setType(PunchingProtos.MsgType.RespRelayPunchingType)
+                            .setReqId(request.getReqId())
+                            .build();
+                    InetSocketAddress address = new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort());
+                    Envelope data = Envelope.builder()
+                            .recipient(address)
+                            .message(message)
+                            .build();
+                    tunnelChannel.writeAndFlush(data);
+                    break;
+                }
+                default: {
+                    super.channelRead(ctx, msg);
+                    break;
+                }
+            }
+        }
     }
 
     private static class RegisterReqHandler extends ChannelDuplexHandler {
@@ -105,8 +119,9 @@ public class TunnelChannel extends BusChannel {
 
         @Override
         public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
+            ChannelPromise channelPromise = ctx.newPromise();
             Channel channel = ctx.channel();
-            channel.pipeline().addAfter("registerReq", "registerResp", new RegisterRespHandler(tunnelChannel, promise));
+            channel.pipeline().addAfter("registerReq", "registerResp", new RegisterRespHandler(tunnelChannel, channelPromise));
             AtomicReference<Integer> delayRef = new AtomicReference<>(100);
             new Runnable() {
                 @Override
@@ -120,11 +135,11 @@ public class TunnelChannel extends BusChannel {
                     }
                 }
             }.run();
-            promise.addListener(new ChannelFutureListener() {
+            channelPromise.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
-                    tunnelChannel.remoteAddress = remoteAddress;
                     delayRef.set(5 * 1000);
+                    ctx.connect(remoteAddress, localAddress, promise);
                 }
             });
         }
@@ -175,31 +190,6 @@ public class TunnelChannel extends BusChannel {
                     super.channelRead(ctx, msg);
                     break;
                 }
-            }
-        }
-    }
-
-    public static class TunnelHandler extends ChannelDuplexHandler {
-
-        private Channel parent;
-        private TunnelChannel tunnelChannel;
-
-        public TunnelHandler(Channel parent, TunnelChannel tunnelChannel) {
-            this.parent = parent;
-            this.tunnelChannel = tunnelChannel;
-        }
-
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
-            PunchingProtos.PunchingMessage request = envelope.message();
-            String streamId = request.getStreamId();
-            if (StringUtils.isNotEmpty(streamId)) {
-                StreamChannel streamChannel = StreamMap.get(streamId);
-                if (null == streamChannel) {
-                    streamChannel = (StreamChannel) StreamChannel.create(tunnelChannel).sync().channel();
-                }
-                streamChannel.receive(msg);
             }
         }
     }

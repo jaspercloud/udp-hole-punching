@@ -21,80 +21,38 @@ public class StreamChannel extends BusChannel {
         super(parent);
     }
 
-    //
-//    private TunnelChannel tunnelChannel;
-//    private String id;
-//    private String host;
-//    private int port;
-//    private boolean active;
-//    private ChannelPromise connectPromise;
-//    private ScheduledFuture<?> pingFuture;
-//    private ScheduledFuture<?> relayPunchingSchedule;
-//
-//    public String getId() {
-//        return id;
-//    }
-//
-//    public boolean isActive() {
-//        return active;
-//    }
-//
-//    private StreamChannel(TunnelChannel tunnelChannel, String id, String host, int port) {
-//        this.tunnelChannel = tunnelChannel;
-//        this.id = id;
-//        this.host = host;
-//        this.port = port;
-//        tunnelChannel.addStreamChannel(this);
-//    }
-//
+    public StreamChannel(Channel parent, ChannelId channelId) {
+        super(parent, channelId);
+    }
 
-    public static ChannelFuture create(TunnelChannel parent) throws InterruptedException {
-        StreamChannel streamChannel = new StreamChannel(parent);
-        parent.addStreamChannel(streamChannel);
+    public static StreamChannel create(TunnelChannel parent, String id, ChannelInitializer<Channel> initializer) throws InterruptedException {
+        StreamChannel streamChannel = new StreamChannel(parent, new RemoteChannelId(id));
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast("ping", new PingHandler(parent, streamChannel));
-                ch.pipeline().addLast("stream", new StreamHandler(parent, streamChannel));
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("stream", new StreamHandler(parent, streamChannel));
+                pipeline.addLast(initializer);
             }
         });
-        ChannelFuture channelFuture = parent.eventLoop().register(streamChannel);
-        return channelFuture;
+        parent.eventLoop().register(streamChannel).sync();
+        return streamChannel;
     }
 
-    @Override
-    public ChannelFuture writeAndFlush(Object msg) {
-        Envelope envelope;
-        if (msg instanceof String) {
-            String data = (String) msg;
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setChannelId(parent().id().asLongText())
-                    .setStreamId(id().asLongText())
-                    .setType(PunchingProtos.MsgType.Data)
-                    .setReqId(UUID.randomUUID().toString())
-                    .setData(ByteString.copyFrom(data.getBytes(StandardCharsets.UTF_8)))
-                    .build();
-            envelope = Envelope.builder()
-                    .recipient((InetSocketAddress) remoteAddress())
-                    .message(message)
-                    .build();
-        } else if (msg instanceof byte[]) {
-            byte[] data = (byte[]) msg;
-            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                    .setChannelId(parent().id().asLongText())
-                    .setStreamId(id().asLongText())
-                    .setType(PunchingProtos.MsgType.Data)
-                    .setReqId(UUID.randomUUID().toString())
-                    .setData(ByteString.copyFrom(data))
-                    .build();
-            envelope = Envelope.builder()
-                    .recipient((InetSocketAddress) remoteAddress())
-                    .message(message)
-                    .build();
-        } else {
-            throw new UnsupportedOperationException();
-        }
-        return parent().writeAndFlush(envelope);
+    public static StreamChannel createClient(TunnelChannel parent) throws InterruptedException {
+        StreamChannel streamChannel = new StreamChannel(parent);
+        streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast("ping", new PingHandler(parent, streamChannel));
+                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("stream", new StreamHandler(parent, streamChannel));
+            }
+        });
+        parent.eventLoop().register(streamChannel).sync();
+        return streamChannel;
     }
 
     private static class PingHandler extends ChannelDuplexHandler {
@@ -220,6 +178,20 @@ public class StreamChannel extends BusChannel {
         }
     }
 
+    private static class WriteHandler extends ChannelOutboundHandlerAdapter {
+
+        private TunnelChannel parent;
+
+        public WriteHandler(TunnelChannel parent) {
+            this.parent = parent;
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            parent.writeAndFlush(msg);
+        }
+    }
+
     private static class StreamHandler extends ChannelDuplexHandler {
 
         private TunnelChannel parent;
@@ -250,124 +222,52 @@ public class StreamChannel extends BusChannel {
                     parent.writeAndFlush(data);
                     break;
                 }
-                case PunchingProtos.MsgType.ReqRelayPunchingType_VALUE: {
-                    PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.parseFrom(request.getData());
-                    logger.debug("recvReqPunching: {}:{} -> {}:{}",
-                            punchingData.getPingHost(), punchingData.getPingPort(),
-                            punchingData.getPongHost(), punchingData.getPongPort());
-                    PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                            .setChannelId(request.getChannelId())
-                            .setStreamId(request.getStreamId())
-                            .setType(PunchingProtos.MsgType.RespRelayPunchingType)
-                            .setReqId(request.getReqId())
-                            .build();
-                    InetSocketAddress address = new InetSocketAddress(punchingData.getPingHost(), punchingData.getPingPort());
-                    Envelope data = Envelope.builder()
-                            .recipient(address)
-                            .message(message)
-                            .build();
-                    parent.writeAndFlush(data);
+                case PunchingProtos.MsgType.Data_VALUE: {
+                    byte[] bytes = envelope.message().getData().toByteArray();
+                    super.channelRead(ctx, bytes);
                     break;
                 }
-                case PunchingProtos.MsgType.Data_VALUE: {
-                    System.out.println("test");
+                default: {
+                    super.channelRead(ctx, msg);
                     break;
                 }
             }
         }
-    }
-//
-//    void receive(Envelope<PunchingProtos.PunchingMessage> message) {
-//        PunchingProtos.PunchingMessage request = message.message();
-//        InetSocketAddress sender = message.sender();
-//        switch (request.getType().getNumber()) {
-//            case PunchingProtos.MsgType.PongType_VALUE: {
-//                this.host = sender.getHostString();
-//                this.port = sender.getPort();
-//                logger.debug("recvPong: {}:{}", host, port);
-//                setConnected();
-//                break;
-//            }
-//            case PunchingProtos.MsgType.RespRelayPunchingType_VALUE: {
-//                String host = sender.getHostString();
-//                int port = sender.getPort();
-//                logger.debug("recvRespPunching: {}:{}", host, port);
-//                this.host = host;
-//                this.port = port;
-//                break;
-//            }
-//        }
-//    }
-//
-//    private void setConnected() {
-//        if (null != connectPromise && !connectPromise.isDone()) {
-//            connectPromise.trySuccess();
-//            active = true;
-//        }
-//    }
-//
-//    public void connect(long timeout) throws InterruptedException, ExecutionException, TimeoutException {
-//        connectPromise = tunnelChannel.newPromise();
-//        pingFuture = tunnelChannel.eventLoop().scheduleAtFixedRate(() -> {
-//            writePing();
-//        }, 0, 100, TimeUnit.MILLISECONDS);
-//        relayPunchingSchedule = tunnelChannel.eventLoop().scheduleAtFixedRate(() -> {
-//            writeRelayPunching();
-//        }, 0, 100, TimeUnit.MILLISECONDS);
-//        try {
-//            connectPromise.get(timeout, TimeUnit.MILLISECONDS);
-//        } catch (Throwable e) {
-//            close();
-//            throw e;
-//        } finally {
-//            pingFuture.cancel(true);
-//            relayPunchingSchedule.cancel(true);
-//        }
-//        pingFuture = tunnelChannel.eventLoop().scheduleAtFixedRate(() -> {
-//            writePing();
-//        }, 0, 5 * 1000, TimeUnit.MILLISECONDS);
-//    }
-//
-//    private void close() {
-//        if (null != pingFuture) {
-//            pingFuture.cancel(true);
-//        }
-//        tunnelChannel.removeStreamChannel(this);
-//        active = false;
-//    }
-//
-//    private void writePing() {
-//        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-//                .setChannelId(tunnelChannel.getId())
-//                .setStreamId(id)
-//                .setType(PunchingProtos.MsgType.PingType)
-//                .setReqId(UUID.randomUUID().toString())
-//                .build();
-//        Envelope envelope = Envelope.builder()
-//                .recipient(new InetSocketAddress(host, port))
-//                .message(message)
-//                .build();
-//        logger.debug("sendPing: {}:{}", host, port);
-//        tunnelChannel.writeAndFlush(envelope);
-//    }
-//
-//    private void writeRelayPunching() {
-//        PunchingProtos.ConnectionData connectionData = tunnelChannel.getConnectionData();
-//        PunchingProtos.PunchingData punchingData = PunchingProtos.PunchingData.newBuilder()
-//                .setPingHost(connectionData.getHost())
-//                .setPingPort(connectionData.getPort())
-//                .setPongHost(host)
-//                .setPongPort(port)
-//                .build();
-//        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-//                .setChannelId(tunnelChannel.getId())
-//                .setStreamId(id)
-//                .setType(PunchingProtos.MsgType.ReqRelayPunchingType)
-//                .setReqId(UUID.randomUUID().toString())
-//                .setData(punchingData.toByteString())
-//                .build();
-//        logger.debug("relayPunching: {}:{}", host, port);
-//        tunnelChannel.writeRelayData(message);
-//    }
 
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            Channel channel = ctx.channel();
+            Envelope envelope;
+            if (msg instanceof String) {
+                String data = (String) msg;
+                PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                        .setChannelId(channel.parent().id().asLongText())
+                        .setStreamId(channel.id().asLongText())
+                        .setType(PunchingProtos.MsgType.Data)
+                        .setReqId(UUID.randomUUID().toString())
+                        .setData(ByteString.copyFrom(data.getBytes(StandardCharsets.UTF_8)))
+                        .build();
+                envelope = Envelope.builder()
+                        .recipient((InetSocketAddress) channel.remoteAddress())
+                        .message(message)
+                        .build();
+            } else if (msg instanceof byte[]) {
+                byte[] data = (byte[]) msg;
+                PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                        .setChannelId(channel.parent().id().asLongText())
+                        .setStreamId(channel.id().asLongText())
+                        .setType(PunchingProtos.MsgType.Data)
+                        .setReqId(UUID.randomUUID().toString())
+                        .setData(ByteString.copyFrom(data))
+                        .build();
+                envelope = Envelope.builder()
+                        .recipient((InetSocketAddress) channel.remoteAddress())
+                        .message(message)
+                        .build();
+            } else {
+                throw new UnsupportedOperationException();
+            }
+            ctx.writeAndFlush(envelope, promise);
+        }
+    }
 }

@@ -37,6 +37,14 @@ public class BusChannel extends AbstractChannel {
         return remoteAddress;
     }
 
+    public void setLocalAddress(SocketAddress localAddress) {
+        this.localAddress = localAddress;
+    }
+
+    public void setRemoteAddress(SocketAddress remoteAddress) {
+        this.remoteAddress = remoteAddress;
+    }
+
     /**
      * Create a new instance and an empty pipeline.
      */
