@@ -16,8 +16,8 @@ public class UdpHolePunchingApplication {
     public static void main(String[] args) throws Exception {
         new SpringApplicationBuilder(UdpHolePunchingApplication.class)
                 .web(WebApplicationType.NONE).run(args);
-//        startServer();
-        startClient();
+        startServer();
+//        startClient();
     }
 
     private static void startServer() throws Exception {
