@@ -92,7 +92,9 @@ public class StreamChannel extends BusChannel {
                 public void run() {
                     try {
                         writePing(ctx, remoteAddressRef.get());
-                        writeRelayPunching(ctx, remoteAddressRef.get());
+                        if (!promise.isDone()) {
+                            writeRelayPunching(ctx, remoteAddressRef.get());
+                        }
                     } finally {
                         if (channel.isActive()) {
                             channel.eventLoop().schedule(this, delayRef.get(), TimeUnit.MILLISECONDS);
