@@ -44,7 +44,7 @@ public class Client2Test {
 
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
-        streamChannel.connect(new InetSocketAddress("47.122.65.163", 1001)).sync().channel();
+        streamChannel.connect(new InetSocketAddress("61.174.208.54", 1001)).sync().channel();
         streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
