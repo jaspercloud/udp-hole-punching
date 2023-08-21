@@ -195,7 +195,7 @@ public class TunnelChannel extends BusChannel {
             if (StringUtils.isNotEmpty(streamId)) {
                 StreamChannel streamChannel = StreamMap.get(streamId);
                 if (null == streamChannel) {
-                    streamChannel = (StreamChannel) StreamChannel.createServer(tunnelChannel).sync().channel();
+                    streamChannel = (StreamChannel) StreamChannel.create(tunnelChannel).sync().channel();
                 }
                 streamChannel.receive(msg);
             }

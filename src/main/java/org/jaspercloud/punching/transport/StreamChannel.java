@@ -46,20 +46,8 @@ public class StreamChannel extends BusChannel {
 //        tunnelChannel.addStreamChannel(this);
 //    }
 //
-    public static ChannelFuture createServer(TunnelChannel parent) throws InterruptedException {
-        StreamChannel streamChannel = new StreamChannel(parent);
-        parent.addStreamChannel(streamChannel);
-        streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast("stream", new StreamHandler(parent));
-            }
-        });
-        ChannelFuture channelFuture = parent.eventLoop().register(streamChannel);
-        return channelFuture;
-    }
 
-    public static ChannelFuture createClient(TunnelChannel parent) throws InterruptedException {
+    public static ChannelFuture create(TunnelChannel parent) throws InterruptedException {
         StreamChannel streamChannel = new StreamChannel(parent);
         parent.addStreamChannel(streamChannel);
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {

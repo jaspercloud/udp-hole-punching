@@ -27,7 +27,7 @@ public class UdpTest {
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
         tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080));
 //        StreamChannel serverChannel = StreamChannel.createServer(tunnelChannel);
-        Channel streamChannel = StreamChannel.createClient(tunnelChannel).sync().channel();
+        Channel streamChannel = StreamChannel.create(tunnelChannel).sync().channel();
         streamChannel.connect(new InetSocketAddress("127.0.0.1", 1001));
         System.out.println("connect success");
 //        Thread.sleep(10 * 1000);
