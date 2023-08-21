@@ -10,7 +10,10 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -18,7 +21,18 @@ public class TunnelChannel extends BusChannel {
 
     private static Logger logger = LoggerFactory.getLogger(TunnelChannel.class);
 
+    private static Map<String, CompletableFuture<PunchingProtos.PunchingMessage>> futureMap = new ConcurrentHashMap<>();
+    private String nodeId;
+    private String token;
     private PunchingProtos.ConnectionData connectionData;
+
+    public String getNodeId() {
+        return nodeId;
+    }
+
+    public String getToken() {
+        return token;
+    }
 
     public PunchingProtos.ConnectionData getConnectionData() {
         return connectionData;
@@ -29,8 +43,10 @@ public class TunnelChannel extends BusChannel {
         return parent().localAddress();
     }
 
-    private TunnelChannel(Channel channel) {
+    private TunnelChannel(Channel channel, String nodeId, String token) {
         super(channel);
+        this.nodeId = nodeId;
+        this.token = token;
     }
 
     private TunnelChannel(Channel channel, ChannelId channelId) {
@@ -51,8 +67,8 @@ public class TunnelChannel extends BusChannel {
         return tunnelChannel;
     }
 
-    public static TunnelChannel createNode(Channel parent) throws InterruptedException {
-        TunnelChannel tunnelChannel = new TunnelChannel(parent);
+    public static TunnelChannel createNode(Channel parent, String nodeId, String token) throws InterruptedException {
+        TunnelChannel tunnelChannel = new TunnelChannel(parent, nodeId, token);
         tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
@@ -68,6 +84,35 @@ public class TunnelChannel extends BusChannel {
     @Override
     public ChannelFuture writeAndFlush(Object msg) {
         return parent().writeAndFlush(msg);
+    }
+
+    public PunchingProtos.NodeData queryNode(String nodeId, String token) throws Exception {
+        String id = UUID.randomUUID().toString();
+        CompletableFuture<PunchingProtos.PunchingMessage> future = new CompletableFuture<>();
+        futureMap.put(id, future);
+        try {
+            PunchingProtos.NodeData nodeData = PunchingProtos.NodeData.newBuilder()
+                    .setNodeId(nodeId)
+                    .setToken(token)
+                    .build();
+            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                    .setChannelId(id().asLongText())
+                    .setStreamId(parent().id().asLongText())
+                    .setType(PunchingProtos.MsgType.ReqQueryNode)
+                    .setReqId(id)
+                    .setData(nodeData.toByteString())
+                    .build();
+            Envelope envelope = Envelope.builder()
+                    .recipient((InetSocketAddress) remoteAddress())
+                    .message(message)
+                    .build();
+            parent().writeAndFlush(envelope);
+            PunchingProtos.PunchingMessage respMessage = future.get();
+            PunchingProtos.NodeData respNodeData = PunchingProtos.NodeData.parseFrom(respMessage.getData());
+            return respNodeData;
+        } finally {
+            futureMap.remove(id);
+        }
     }
 
     private static class TunnelHandler extends ChannelInboundHandlerAdapter {
@@ -100,6 +145,13 @@ public class TunnelChannel extends BusChannel {
                             .message(message)
                             .build();
                     tunnelChannel.writeAndFlush(data);
+                    break;
+                }
+                case PunchingProtos.MsgType.RespQueryNode_VALUE: {
+                    CompletableFuture<PunchingProtos.PunchingMessage> future = futureMap.remove(request.getReqId());
+                    if (null != future) {
+                        future.complete(request);
+                    }
                     break;
                 }
                 default: {
@@ -148,10 +200,15 @@ public class TunnelChannel extends BusChannel {
         }
 
         private void sendRegister(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
+            PunchingProtos.NodeData nodeData = PunchingProtos.NodeData.newBuilder()
+                    .setNodeId(tunnelChannel.getNodeId())
+                    .setToken(tunnelChannel.getToken())
+                    .build();
             PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
                     .setChannelId(ctx.channel().id().asLongText())
                     .setType(PunchingProtos.MsgType.ReqRegisterType)
                     .setReqId(UUID.randomUUID().toString())
+                    .setData(nodeData.toByteString())
                     .build();
             Envelope envelope = Envelope.builder()
                     .recipient(remoteAddress)

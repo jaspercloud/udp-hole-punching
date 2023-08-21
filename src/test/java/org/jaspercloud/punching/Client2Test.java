@@ -7,6 +7,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
+import org.jaspercloud.punching.proto.PunchingProtos;
 import org.jaspercloud.punching.transport.client.*;
 import org.slf4j.impl.StaticLoggerBinder;
 
@@ -34,17 +35,17 @@ public class Client2Test {
             }
         });
 
-        Channel channel = UdpChannel.create(1002);
+        Channel channel = UdpChannel.create(0);
         channel.pipeline().addLast(tunnelChannelManager);
 
-        TunnelChannel tunnelChannel = TunnelChannel.createNode(channel);
+        TunnelChannel tunnelChannel = TunnelChannel.createNode(channel, "test2", "test");
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
         tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync().channel();
         tunnelChannel.pipeline().addLast(streamChannelManager);
 
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
-        streamChannel.connect(new InetSocketAddress("61.174.208.54", 1001)).sync().channel();
+        streamChannel.connect(new InetSocketAddress("61.174.208.54", 55749)).sync().channel();
         streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {

@@ -9,7 +9,9 @@ enum MsgType {
   RespRegisterType = 4;
   ReqRelayPunchingType = 5;
   RespRelayPunchingType = 6;
-  Data = 7;
+  ReqQueryNode = 7;
+  RespQueryNode = 8;
+  Data = 9;
 }
 
 message PunchingMessage {
@@ -30,4 +32,11 @@ message PunchingData {
   required int32 pingPort = 2;
   required string pongHost = 3;
   required int32 pongPort = 4;
+}
+
+message NodeData {
+  required string nodeId = 1;
+  required string token = 2;
+  optional string host = 3;
+  optional int32 port = 4;
 }
