@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,34 +54,72 @@ public class StreamChannel extends BusChannel {
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel ch) throws Exception {
-                ch.pipeline().addLast("ping", new PingHandler(parent));
-                ch.pipeline().addLast("stream", new StreamHandler(parent));
+                ch.pipeline().addLast("ping", new PingHandler(parent, streamChannel));
+                ch.pipeline().addLast("stream", new StreamHandler(parent, streamChannel));
             }
         });
         ChannelFuture channelFuture = parent.eventLoop().register(streamChannel);
         return channelFuture;
     }
 
+    @Override
+    public ChannelFuture writeAndFlush(Object msg) {
+        Envelope envelope;
+        if (msg instanceof String) {
+            String data = (String) msg;
+            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                    .setChannelId(parent().id().asLongText())
+                    .setStreamId(id().asLongText())
+                    .setType(PunchingProtos.MsgType.Data)
+                    .setReqId(UUID.randomUUID().toString())
+                    .setData(ByteString.copyFrom(data.getBytes(StandardCharsets.UTF_8)))
+                    .build();
+            envelope = Envelope.builder()
+                    .recipient((InetSocketAddress) remoteAddress())
+                    .message(message)
+                    .build();
+        } else if (msg instanceof byte[]) {
+            byte[] data = (byte[]) msg;
+            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                    .setChannelId(parent().id().asLongText())
+                    .setStreamId(id().asLongText())
+                    .setType(PunchingProtos.MsgType.Data)
+                    .setReqId(UUID.randomUUID().toString())
+                    .setData(ByteString.copyFrom(data))
+                    .build();
+            envelope = Envelope.builder()
+                    .recipient((InetSocketAddress) remoteAddress())
+                    .message(message)
+                    .build();
+        } else {
+            throw new UnsupportedOperationException();
+        }
+        return parent().writeAndFlush(envelope);
+    }
+
     private static class PingHandler extends ChannelDuplexHandler {
 
         private TunnelChannel parent;
+        private StreamChannel streamChannel;
 
-        public PingHandler(TunnelChannel parent) {
+        public PingHandler(TunnelChannel parent, StreamChannel streamChannel) {
             this.parent = parent;
+            this.streamChannel = streamChannel;
         }
 
         @Override
         public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
+            ChannelPromise channelPromise = ctx.newPromise();
             Channel channel = ctx.channel();
             AtomicReference<InetSocketAddress> remoteAddressRef = new AtomicReference<>((InetSocketAddress) remoteAddress);
-            ctx.pipeline().addAfter("ping", "pong", new PongHandler(parent, remoteAddressRef, promise));
+            ctx.pipeline().addAfter("ping", "pong", new PongHandler(parent, remoteAddressRef, channelPromise));
             AtomicReference<Integer> delayRef = new AtomicReference<>(100);
             new Runnable() {
                 @Override
                 public void run() {
                     try {
                         writePing(ctx, remoteAddressRef.get());
-                        if (!promise.isDone()) {
+                        if (!channelPromise.isDone()) {
                             writeRelayPunching(ctx, remoteAddressRef.get());
                         }
                     } finally {
@@ -90,10 +129,11 @@ public class StreamChannel extends BusChannel {
                     }
                 }
             }.run();
-            promise.addListener(new ChannelFutureListener() {
+            channelPromise.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
                     delayRef.set(5 * 1000);
+                    ctx.connect(remoteAddressRef.get(), localAddress, promise);
                 }
             });
         }
@@ -180,12 +220,14 @@ public class StreamChannel extends BusChannel {
         }
     }
 
-    private static class StreamHandler extends ChannelInboundHandlerAdapter {
+    private static class StreamHandler extends ChannelDuplexHandler {
 
         private TunnelChannel parent;
+        private StreamChannel streamChannel;
 
-        public StreamHandler(TunnelChannel parent) {
+        public StreamHandler(TunnelChannel parent, StreamChannel streamChannel) {
             this.parent = parent;
+            this.streamChannel = streamChannel;
         }
 
         @Override
@@ -225,6 +267,10 @@ public class StreamChannel extends BusChannel {
                             .message(message)
                             .build();
                     parent.writeAndFlush(data);
+                    break;
+                }
+                case PunchingProtos.MsgType.Data_VALUE: {
+                    System.out.println("test");
                     break;
                 }
             }

@@ -27,6 +27,16 @@ public class BusChannel extends AbstractChannel {
     private SocketAddress localAddress;
     private SocketAddress remoteAddress;
 
+    @Override
+    public SocketAddress localAddress() {
+        return localAddress;
+    }
+
+    @Override
+    public SocketAddress remoteAddress() {
+        return remoteAddress;
+    }
+
     /**
      * Create a new instance and an empty pipeline.
      */

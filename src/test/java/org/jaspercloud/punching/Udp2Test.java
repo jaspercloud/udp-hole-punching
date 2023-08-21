@@ -23,8 +23,9 @@ public class Udp2Test {
         Channel channel = UdpChannel.create(1002).sync().channel();
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
         tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync().channel();
-        Channel streamChannel = StreamChannel.create(tunnelChannel).sync().channel();
-        streamChannel.connect(new InetSocketAddress("61.174.208.54", 1001));
+        Channel streamChannel = StreamChannel.create(tunnelChannel).sync().channel()
+                .connect(new InetSocketAddress("61.174.208.54", 1001)).sync().channel();
+        streamChannel.writeAndFlush("hello");
         CountDownLatch countDownLatch = new CountDownLatch(1);
         countDownLatch.await();
     }

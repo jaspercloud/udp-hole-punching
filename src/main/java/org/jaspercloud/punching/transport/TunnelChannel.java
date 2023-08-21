@@ -81,7 +81,7 @@ public class TunnelChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ch.pipeline().addLast("registerReq", new RegisterReqHandler(parent, tunnelChannel));
-                ch.pipeline().addLast("tunnel", new TunnelHandler(tunnelChannel));
+                ch.pipeline().addLast("tunnel", new TunnelHandler(parent, tunnelChannel));
             }
         });
         parent.eventLoop().register(tunnelChannel).sync();
@@ -179,11 +179,13 @@ public class TunnelChannel extends BusChannel {
         }
     }
 
-    public static class TunnelHandler extends ChannelInboundHandlerAdapter {
+    public static class TunnelHandler extends ChannelDuplexHandler {
 
+        private Channel parent;
         private TunnelChannel tunnelChannel;
 
-        public TunnelHandler(TunnelChannel tunnelChannel) {
+        public TunnelHandler(Channel parent, TunnelChannel tunnelChannel) {
+            this.parent = parent;
             this.tunnelChannel = tunnelChannel;
         }
 
