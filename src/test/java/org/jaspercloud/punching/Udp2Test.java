@@ -12,6 +12,7 @@ import org.jaspercloud.punching.transport.client.*;
 import org.slf4j.impl.StaticLoggerBinder;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 public class Udp2Test {
 
@@ -42,11 +43,28 @@ public class Udp2Test {
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
         tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync().channel();
         tunnelChannel.pipeline().addLast(streamChannelManager);
-        PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test2", "test");
-
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
+
+        PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test");
+        System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
         streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync().channel();
+
+        new Thread(() -> {
+            int port = 0;
+            while (true) {
+                try {
+                    PunchingProtos.NodeData resp = tunnelChannel.queryNode("test1", "test");
+                    if (!Objects.equals(resp.getPort(), port)) {
+                        streamChannel.setRemoteAddress(new InetSocketAddress(resp.getHost(), resp.getPort()));
+                    }
+                    Thread.sleep(1000L);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
         streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {

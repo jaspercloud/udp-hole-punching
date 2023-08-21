@@ -47,7 +47,7 @@ public class Udp1Test {
             }
         });
 
-        Channel channel = UdpChannel.create(1001);
+        Channel channel = UdpChannel.create(0);
         channel.pipeline().addLast(tunnelChannelManager);
 
         TunnelChannel tunnelChannel = TunnelChannel.createNode(channel, "test1", "test");
