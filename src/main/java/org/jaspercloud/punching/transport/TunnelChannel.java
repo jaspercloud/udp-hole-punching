@@ -1,73 +1,56 @@
 package org.jaspercloud.punching.transport;
 
 import io.netty.channel.*;
-import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.util.concurrent.ScheduledFuture;
 import org.apache.commons.lang3.StringUtils;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class TunnelChannel {
+public class TunnelChannel extends BusChannel {
 
     private static Logger logger = LoggerFactory.getLogger(TunnelChannel.class);
 
-    private Channel channel;
-    private String id;
-    private String host;
-    private int port;
-    private boolean active;
-    private ChannelPromise connectPromise;
-    private ScheduledFuture<?> registerFuture;
-    private PunchingProtos.ConnectionData connectionData;
-
     private static Map<String, TunnelChannel> TunnelMap = new ConcurrentHashMap<>();
-    private Map<String, StreamChannel> streamMap = new ConcurrentHashMap<>();
+    private static Map<String, StreamChannel> StreamMap = new ConcurrentHashMap<>();
 
-    public void addStreamChannel(StreamChannel channel) {
-        streamMap.put(channel.getId(), channel);
-    }
-
-    public void removeStreamChannel(StreamChannel channel) {
-        streamMap.remove(channel.getId());
-    }
-
-    public String getId() {
-        return id;
-    }
+    private PunchingProtos.ConnectionData connectionData;
+    private SocketAddress remoteAddress;
 
     public PunchingProtos.ConnectionData getConnectionData() {
         return connectionData;
     }
 
-    public boolean isActive() {
-        return active;
+    public void addStreamChannel(StreamChannel channel) {
+        channel.closeFuture().addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) throws Exception {
+                Channel channel = future.channel();
+                StreamMap.remove(channel.id().asLongText());
+            }
+        });
+        StreamMap.put(channel.id().asLongText(), channel);
     }
 
-    private void setConnected() {
-        if (null != connectPromise && !connectPromise.isDone()) {
-            connectPromise.trySuccess();
-            active = true;
-        }
+    @Override
+    public SocketAddress localAddress() {
+        return parent().localAddress();
     }
 
-    private void setConnectionData(PunchingProtos.ConnectionData connectionData) {
-        this.connectionData = connectionData;
+    @Override
+    public SocketAddress remoteAddress() {
+        return remoteAddress;
     }
 
-    private TunnelChannel(Channel channel, String id, String host, int port) {
-        this.channel = channel;
-        this.id = id;
-        this.host = host;
-        this.port = port;
+    private TunnelChannel(Channel channel) {
+        super(channel);
     }
 
     public static SimpleChannelInboundHandler<Envelope<PunchingProtos.PunchingMessage>> createHandler() {
@@ -76,97 +59,147 @@ public class TunnelChannel {
             protected void channelRead0(ChannelHandlerContext ctx, Envelope<PunchingProtos.PunchingMessage> msg) throws Exception {
                 PunchingProtos.PunchingMessage request = msg.message();
                 TunnelChannel tunnelChannel = TunnelMap.get(request.getChannelId());
-                if (null != tunnelChannel) {
-                    switch (request.getType().getNumber()) {
-                        case PunchingProtos.MsgType.RespRegisterType_VALUE: {
-                            PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
-                            InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
-                            logger.debug("recvRegister: {} -> {}:{}",
-                                    localAddress.getPort(),
-                                    connectionData.getHost(), connectionData.getPort());
-                            tunnelChannel.setConnected();
-                            tunnelChannel.setConnectionData(connectionData);
-                            break;
-                        }
-                        default: {
-                            String streamId = request.getStreamId();
-                            if (StringUtils.isNotEmpty(streamId)) {
-                                StreamChannel streamChannel = tunnelChannel.streamMap.get(streamId);
-                                if (null != streamChannel) {
-                                    streamChannel.receive(msg);
-                                }
-                            }
-                        }
-                    }
+                if (null == tunnelChannel) {
+                    tunnelChannel = TunnelChannel.create(ctx.channel());
                 }
+                tunnelChannel.receive(msg);
             }
         };
         return handler;
     }
 
-    public static TunnelChannel create(Channel channel, String host, int port) {
-        return new TunnelChannel(channel, UUID.randomUUID().toString(), host, port);
+    public static TunnelChannel create(Channel parent) throws InterruptedException {
+        TunnelChannel tunnelChannel = new TunnelChannel(parent);
+        TunnelMap.put(tunnelChannel.id().asLongText(), tunnelChannel);
+        tunnelChannel.closeFuture().addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) throws Exception {
+                TunnelMap.remove(tunnelChannel.id().asLongText());
+            }
+        });
+        tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                ch.pipeline().addLast("registerReq", new RegisterReqHandler(parent, tunnelChannel));
+                ch.pipeline().addLast("tunnel", new TunnelHandler(tunnelChannel));
+            }
+        });
+        parent.eventLoop().register(tunnelChannel).sync();
+        return tunnelChannel;
     }
 
-    public void connect(long timeout) throws ExecutionException, InterruptedException, TimeoutException {
-        TunnelMap.put(id, this);
-        try {
-            connectPromise = channel.newPromise();
-            registerFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-                writeRegister();
-            }, 0, 100, TimeUnit.MILLISECONDS);
-            connectPromise.get(timeout, TimeUnit.MILLISECONDS);
-        } catch (Throwable e) {
-            close();
-            throw e;
-        }
-        registerFuture.cancel(true);
-        registerFuture = channel.eventLoop().scheduleAtFixedRate(() -> {
-            writeRegister();
-        }, 0, 5 * 1000, TimeUnit.MILLISECONDS);
-    }
-
-    public void close() {
-        if (null != registerFuture) {
-            registerFuture.cancel(true);
-        }
-        active = false;
-        TunnelMap.remove(id);
-    }
-
-    private void writeRegister() {
-        PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
-                .setChannelId(id)
-                .setType(PunchingProtos.MsgType.ReqRegisterType)
-                .setReqId(UUID.randomUUID().toString())
-                .build();
-        Envelope envelope = Envelope.builder()
-                .recipient(new InetSocketAddress(host, port))
-                .message(message)
-                .build();
-        logger.debug("sendRegister: {}:{}", host, port);
-        channel.writeAndFlush(envelope);
-    }
-
+    @Override
     public ChannelFuture writeAndFlush(Object msg) {
-        ChannelFuture future = channel.writeAndFlush(msg);
-        return future;
+        return parent().writeAndFlush(msg);
     }
 
-    public void writeRelayData(PunchingProtos.PunchingMessage message) {
-        Envelope envelope = Envelope.builder()
-                .recipient(new InetSocketAddress(host, port))
-                .message(message)
-                .build();
-        channel.writeAndFlush(envelope);
+    private static class RegisterReqHandler extends ChannelDuplexHandler {
+
+        private Channel parent;
+        private TunnelChannel tunnelChannel;
+
+        public RegisterReqHandler(Channel parent, TunnelChannel tunnelChannel) {
+            this.parent = parent;
+            this.tunnelChannel = tunnelChannel;
+        }
+
+        @Override
+        public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
+            Channel channel = ctx.channel();
+            channel.pipeline().addAfter("registerReq", "registerResp", new RegisterRespHandler(tunnelChannel, promise));
+            AtomicReference<Integer> delayRef = new AtomicReference<>(100);
+            new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        sendRegister(ctx, (InetSocketAddress) remoteAddress);
+                    } finally {
+                        if (channel.isActive()) {
+                            channel.eventLoop().schedule(this, delayRef.get(), TimeUnit.MILLISECONDS);
+                        }
+                    }
+                }
+            }.run();
+            promise.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    tunnelChannel.remoteAddress = remoteAddress;
+                    delayRef.set(5 * 1000);
+                }
+            });
+        }
+
+        private void sendRegister(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
+            PunchingProtos.PunchingMessage message = PunchingProtos.PunchingMessage.newBuilder()
+                    .setChannelId(ctx.channel().id().asLongText())
+                    .setType(PunchingProtos.MsgType.ReqRegisterType)
+                    .setReqId(UUID.randomUUID().toString())
+                    .build();
+            Envelope envelope = Envelope.builder()
+                    .recipient(remoteAddress)
+                    .message(message)
+                    .build();
+            logger.debug("sendRegister: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
+            parent.writeAndFlush(envelope);
+        }
     }
 
-    public EventLoop eventLoop() {
-        return channel.eventLoop();
+    private static class RegisterRespHandler extends ChannelInboundHandlerAdapter {
+
+        private TunnelChannel tunnelChannel;
+        private ChannelPromise promise;
+
+        public RegisterRespHandler(TunnelChannel tunnelChannel, ChannelPromise promise) {
+            this.tunnelChannel = tunnelChannel;
+            this.promise = promise;
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+            PunchingProtos.PunchingMessage request = envelope.message();
+            System.out.println("request: " + request.getType().toString());
+            switch (request.getType().getNumber()) {
+                case PunchingProtos.MsgType.RespRegisterType_VALUE: {
+                    PunchingProtos.ConnectionData connectionData = PunchingProtos.ConnectionData.parseFrom(request.getData());
+                    InetSocketAddress localAddress = (InetSocketAddress) ctx.channel().localAddress();
+                    logger.debug("recvRegister: {} -> {}:{}",
+                            localAddress.getPort(),
+                            connectionData.getHost(), connectionData.getPort());
+                    tunnelChannel.connectionData = connectionData;
+                    if (!promise.isDone()) {
+                        promise.trySuccess();
+                    }
+                    break;
+                }
+                default: {
+                    super.channelRead(ctx, msg);
+                    break;
+                }
+            }
+        }
     }
 
-    public ChannelPromise newPromise() {
-        ChannelPromise promise = channel.newPromise();
-        return promise;
+    public static class TunnelHandler extends ChannelInboundHandlerAdapter {
+
+        private TunnelChannel tunnelChannel;
+
+        public TunnelHandler(TunnelChannel tunnelChannel) {
+            this.tunnelChannel = tunnelChannel;
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
+            PunchingProtos.PunchingMessage request = envelope.message();
+            String streamId = request.getStreamId();
+            if (StringUtils.isNotEmpty(streamId)) {
+                StreamChannel streamChannel = StreamMap.get(streamId);
+                if (null == streamChannel) {
+                    streamChannel = (StreamChannel) StreamChannel.createServer(tunnelChannel).sync().channel();
+                }
+                streamChannel.receive(msg);
+            }
+        }
     }
 }

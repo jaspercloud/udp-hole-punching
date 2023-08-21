@@ -1,7 +1,10 @@
 package org.jaspercloud.punching.transport;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.*;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
@@ -10,12 +13,12 @@ import java.net.InetSocketAddress;
 
 public class UdpChannel {
 
-    public static Channel create(int localPort) throws InterruptedException {
-        Channel channel = create("0.0.0.0", localPort);
-        return channel;
+    public static ChannelFuture create(int localPort) throws InterruptedException {
+        ChannelFuture future = create("0.0.0.0", localPort);
+        return future;
     }
 
-    public static Channel create(String localHost, int localPort) throws InterruptedException {
+    public static ChannelFuture create(String localHost, int localPort) throws InterruptedException {
         InetSocketAddress local = new InetSocketAddress(localHost, localPort);
         NioEventLoopGroup group = new NioEventLoopGroup();
         Bootstrap bootstrap = new Bootstrap();
@@ -30,13 +33,13 @@ public class UdpChannel {
                 pipeline.addLast("punching", TunnelChannel.createHandler());
             }
         });
-        Channel channel = bootstrap.bind(local).sync().channel();
-        channel.closeFuture().addListener(new ChannelFutureListener() {
+        ChannelFuture channelFuture = bootstrap.bind(local);
+        channelFuture.channel().closeFuture().addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
                 group.shutdownGracefully();
             }
         });
-        return channel;
+        return channelFuture;
     }
 }
