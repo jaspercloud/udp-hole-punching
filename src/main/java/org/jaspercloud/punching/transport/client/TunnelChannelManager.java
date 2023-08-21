@@ -1,7 +1,8 @@
-package org.jaspercloud.punching.transport;
+package org.jaspercloud.punching.transport.client;
 
 import io.netty.channel.*;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.jaspercloud.punching.transport.Envelope;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

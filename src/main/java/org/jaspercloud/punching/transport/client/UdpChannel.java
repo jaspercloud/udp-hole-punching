@@ -1,9 +1,11 @@
-package org.jaspercloud.punching.transport;
+package org.jaspercloud.punching.transport.client;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import org.jaspercloud.punching.transport.Decoder;
+import org.jaspercloud.punching.transport.Encoder;
 
 import java.net.InetSocketAddress;
 

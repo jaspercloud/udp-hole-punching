@@ -1,7 +1,10 @@
-package org.jaspercloud.punching.transport;
+package org.jaspercloud.punching.transport.client;
 
 import io.netty.channel.*;
 import org.jaspercloud.punching.proto.PunchingProtos;
+import org.jaspercloud.punching.transport.BusChannel;
+import org.jaspercloud.punching.transport.Envelope;
+import org.jaspercloud.punching.transport.RemoteChannelId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -7,7 +7,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
-import org.jaspercloud.punching.transport.*;
+import org.jaspercloud.punching.transport.client.*;
 import org.slf4j.impl.StaticLoggerBinder;
 
 import java.net.InetSocketAddress;
@@ -55,7 +55,7 @@ public class Udp2Test {
             }
         });
         while (true) {
-            streamChannel.writeAndFlush("hello");
+            streamChannel.writeAndFlush("say hello");
             Thread.sleep(1000L);
         }
     }

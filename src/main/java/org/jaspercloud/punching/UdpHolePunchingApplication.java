@@ -1,6 +1,6 @@
 package org.jaspercloud.punching;
 
-import org.jaspercloud.punching.transport.PunchingServer;
+import org.jaspercloud.punching.transport.server.PunchingServer;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;

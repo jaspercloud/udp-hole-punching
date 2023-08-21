@@ -3,7 +3,7 @@ package org.jaspercloud.punching;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
-import org.jaspercloud.punching.transport.PunchingServer;
+import org.jaspercloud.punching.transport.server.PunchingServer;
 import org.slf4j.impl.StaticLoggerBinder;
 
 public class ServerTest {

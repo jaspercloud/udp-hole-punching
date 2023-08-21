@@ -7,10 +7,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
-import org.jaspercloud.punching.transport.StreamChannelManager;
-import org.jaspercloud.punching.transport.TunnelChannel;
-import org.jaspercloud.punching.transport.TunnelChannelManager;
-import org.jaspercloud.punching.transport.UdpChannel;
+import org.jaspercloud.punching.transport.client.StreamChannelManager;
+import org.jaspercloud.punching.transport.client.TunnelChannel;
+import org.jaspercloud.punching.transport.client.TunnelChannelManager;
+import org.jaspercloud.punching.transport.client.UdpChannel;
 import org.slf4j.impl.StaticLoggerBinder;
 
 import java.net.InetSocketAddress;
@@ -35,7 +35,7 @@ public class Udp1Test {
                         byte[] bytes = (byte[]) msg;
                         String text = new String(bytes);
                         System.out.println(String.format("%s->%s: %s", channel.remoteAddress(), channel.localAddress(), text));
-                        ctx.writeAndFlush("say");
+                        ctx.writeAndFlush("say bye");
                     }
                 });
             }
@@ -53,6 +53,8 @@ public class Udp1Test {
         TunnelChannel tunnelChannel = TunnelChannel.create(channel);
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
         tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync().channel();
+        tunnelChannel.pipeline().addLast(streamChannelManager);
+
         CountDownLatch countDownLatch = new CountDownLatch(1);
         countDownLatch.await();
     }

@@ -4,9 +4,9 @@
 //import ch.qos.logback.classic.Logger;
 //import ch.qos.logback.classic.LoggerContext;
 //import io.netty.channel.Channel;
-//import org.jaspercloud.punching.transport.StreamChannel;
-//import org.jaspercloud.punching.transport.TunnelChannel;
-//import org.jaspercloud.punching.transport.UdpChannel;
+//import org.jaspercloud.punching.transport.client.StreamChannel;
+//import org.jaspercloud.punching.transport.client.TunnelChannel;
+//import org.jaspercloud.punching.transport.client.UdpChannel;
 //import org.junit.jupiter.api.Test;
 //import org.slf4j.impl.StaticLoggerBinder;
 //
