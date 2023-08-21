@@ -28,7 +28,7 @@ public class StreamChannel extends BusChannel {
         super(parent, channelId);
     }
 
-    public static StreamChannel create(TunnelChannel parent, String id, ChannelInitializer<Channel> initializer) throws InterruptedException {
+    static StreamChannel create(TunnelChannel parent, String id, ChannelInitializer<Channel> initializer) throws InterruptedException {
         StreamChannel streamChannel = new StreamChannel(parent, new RemoteChannelId(id));
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override

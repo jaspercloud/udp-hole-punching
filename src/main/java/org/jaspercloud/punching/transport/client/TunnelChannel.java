@@ -37,7 +37,7 @@ public class TunnelChannel extends BusChannel {
         super(channel, channelId);
     }
 
-    public static TunnelChannel create(Channel parent, String channelId, ChannelInitializer<Channel> initializer) throws InterruptedException {
+    static TunnelChannel create(Channel parent, String channelId, ChannelInitializer<Channel> initializer) throws InterruptedException {
         TunnelChannel tunnelChannel = new TunnelChannel(parent, new RemoteChannelId(channelId));
         tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override
@@ -51,7 +51,7 @@ public class TunnelChannel extends BusChannel {
         return tunnelChannel;
     }
 
-    public static TunnelChannel create(Channel parent) throws InterruptedException {
+    public static TunnelChannel createNode(Channel parent) throws InterruptedException {
         TunnelChannel tunnelChannel = new TunnelChannel(parent);
         tunnelChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
             @Override

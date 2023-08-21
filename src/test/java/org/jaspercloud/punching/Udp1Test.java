@@ -50,7 +50,7 @@ public class Udp1Test {
         Channel channel = UdpChannel.create(1001);
         channel.pipeline().addLast(tunnelChannelManager);
 
-        TunnelChannel tunnelChannel = TunnelChannel.create(channel);
+        TunnelChannel tunnelChannel = TunnelChannel.createNode(channel);
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
         tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync().channel();
         tunnelChannel.pipeline().addLast(streamChannelManager);
