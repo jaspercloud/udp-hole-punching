@@ -12,6 +12,7 @@ import org.jaspercloud.punching.transport.client.*;
 import org.slf4j.impl.StaticLoggerBinder;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 public class Client2Test {
 
@@ -40,12 +41,30 @@ public class Client2Test {
 
         TunnelChannel tunnelChannel = TunnelChannel.createNode(channel, "test2", "test");
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
-        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync().channel();
+        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync();
         tunnelChannel.pipeline().addLast(streamChannelManager);
-
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
-        streamChannel.connect(new InetSocketAddress("61.174.208.54", 55749)).sync().channel();
+
+        PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test");
+        System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
+        streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync();
+
+        new Thread(() -> {
+            int port = 0;
+            while (true) {
+                try {
+                    PunchingProtos.NodeData resp = tunnelChannel.queryNode("test1", "test");
+                    if (!Objects.equals(resp.getPort(), port)) {
+                        streamChannel.setRemoteAddress(new InetSocketAddress(resp.getHost(), resp.getPort()));
+                    }
+                    Thread.sleep(1000L);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
         streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {

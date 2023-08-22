@@ -18,6 +18,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class Client1Test {
 
+
     public static void main(String[] args) throws Exception {
         LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
         Logger root = loggerContext.getLogger("ROOT");
@@ -47,12 +48,12 @@ public class Client1Test {
             }
         });
 
-        Channel channel = UdpChannel.create(1001);
+        Channel channel = UdpChannel.create(0);
         channel.pipeline().addLast(tunnelChannelManager);
 
         TunnelChannel tunnelChannel = TunnelChannel.createNode(channel, "test1", "test");
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
-        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync().channel();
+        tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync();
         tunnelChannel.pipeline().addLast(streamChannelManager);
 
         CountDownLatch countDownLatch = new CountDownLatch(1);

@@ -41,14 +41,14 @@ public class Udp2Test {
 
         TunnelChannel tunnelChannel = TunnelChannel.createNode(channel, "test2", "test");
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
-        tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync().channel();
+        tunnelChannel.connect(new InetSocketAddress("127.0.0.1", 1080)).sync();
         tunnelChannel.pipeline().addLast(streamChannelManager);
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
 
         PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test");
         System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
-        streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync().channel();
+        streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync();
 
         new Thread(() -> {
             int port = 0;
