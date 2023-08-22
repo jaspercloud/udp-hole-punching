@@ -43,28 +43,13 @@ public class Client2Test {
         tunnelChannelManager.addTunnelChannel(tunnelChannel);
         tunnelChannel.connect(new InetSocketAddress("47.122.65.163", 1080)).sync();
         tunnelChannel.pipeline().addLast(streamChannelManager);
-        StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
-        streamChannelManager.addStreamChannel(streamChannel);
 
         PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test", 3000);
         System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
+
+        StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
+        streamChannelManager.addStreamChannel(streamChannel);
         streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync();
-
-        new Thread(() -> {
-            int port = 0;
-            while (true) {
-                try {
-                    PunchingProtos.NodeData resp = tunnelChannel.queryNode("test1", "test", 3000);
-                    if (!Objects.equals(resp.getPort(), port)) {
-                        streamChannel.setRemoteAddress(new InetSocketAddress(resp.getHost(), resp.getPort()));
-                    }
-                    Thread.sleep(1000L);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-
         streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -74,8 +59,30 @@ public class Client2Test {
                 System.out.println(String.format("%s->%s: %s", channel.remoteAddress(), channel.localAddress(), text));
             }
         });
+
+        int port = nodeData.getPort();
         while (true) {
-            streamChannel.writeAndFlush("say hello");
+            nodeData = tunnelChannel.queryNode("test1", "test", 3000);
+            System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
+            if (port != nodeData.getPort()) {
+                port = nodeData.getPort();
+                streamChannel.close().sync();
+                System.out.println("init");
+                streamChannel = StreamChannel.createClient(tunnelChannel);
+                streamChannelManager.addStreamChannel(streamChannel);
+                streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync();
+                streamChannel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+                        Channel channel = ctx.channel();
+                        byte[] bytes = (byte[]) msg;
+                        String text = new String(bytes);
+                        System.out.println(String.format("%s->%s: %s", channel.remoteAddress(), channel.localAddress(), text));
+                    }
+                });
+            } else {
+                streamChannel.writeAndFlush("say hello");
+            }
             Thread.sleep(1000L);
         }
     }
