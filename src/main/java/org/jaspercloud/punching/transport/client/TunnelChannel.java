@@ -59,7 +59,8 @@ public class TunnelChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("tunnel", new TunnelHandler(tunnelChannel));
+                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("tunnel", new TunnelHandler());
                 pipeline.addLast(initializer);
             }
         });
@@ -73,17 +74,13 @@ public class TunnelChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("registerReq", new RegisterReqHandler(parent, tunnelChannel));
-                pipeline.addLast("tunnel", new TunnelHandler(tunnelChannel));
+                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("registerReq", new RegisterReqHandler(tunnelChannel));
+                pipeline.addLast("tunnel", new TunnelHandler());
             }
         });
         parent.eventLoop().register(tunnelChannel).sync();
         return tunnelChannel;
-    }
-
-    @Override
-    public ChannelFuture writeAndFlush(Object msg) {
-        return parent().writeAndFlush(msg);
     }
 
     public PunchingProtos.NodeData queryNode(String nodeId, String token, long timeout) throws Exception {
@@ -115,13 +112,21 @@ public class TunnelChannel extends BusChannel {
         }
     }
 
-    private static class TunnelHandler extends ChannelInboundHandlerAdapter {
+    private static class WriteHandler extends ChannelOutboundHandlerAdapter {
 
-        private TunnelChannel tunnelChannel;
+        private Channel parent;
 
-        public TunnelHandler(TunnelChannel tunnelChannel) {
-            this.tunnelChannel = tunnelChannel;
+        public WriteHandler(Channel parent) {
+            this.parent = parent;
         }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            parent.writeAndFlush(msg);
+        }
+    }
+
+    private static class TunnelHandler extends ChannelInboundHandlerAdapter {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -144,7 +149,7 @@ public class TunnelChannel extends BusChannel {
                             .recipient(address)
                             .message(message)
                             .build();
-                    tunnelChannel.writeAndFlush(data);
+                    ctx.writeAndFlush(data);
                     break;
                 }
                 case PunchingProtos.MsgType.RespQueryNode_VALUE: {
@@ -164,11 +169,9 @@ public class TunnelChannel extends BusChannel {
 
     private static class RegisterReqHandler extends ChannelDuplexHandler {
 
-        private Channel parent;
         private TunnelChannel tunnelChannel;
 
-        public RegisterReqHandler(Channel parent, TunnelChannel tunnelChannel) {
-            this.parent = parent;
+        public RegisterReqHandler(TunnelChannel tunnelChannel) {
             this.tunnelChannel = tunnelChannel;
         }
 
@@ -215,7 +218,7 @@ public class TunnelChannel extends BusChannel {
                     .message(message)
                     .build();
             logger.debug("sendRegister: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
-            parent.writeAndFlush(envelope);
+            ctx.writeAndFlush(envelope);
         }
     }
 

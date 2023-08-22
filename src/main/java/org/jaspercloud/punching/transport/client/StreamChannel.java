@@ -28,6 +28,11 @@ public class StreamChannel extends BusChannel {
         super(parent, channelId);
     }
 
+    @Override
+    public SocketAddress localAddress() {
+        return parent().localAddress();
+    }
+
     static StreamChannel create(TunnelChannel parent, String id, ChannelInitializer<Channel> initializer) throws InterruptedException {
         StreamChannel streamChannel = new StreamChannel(parent, new RemoteChannelId(id));
         streamChannel.pipeline().addLast("init", new ChannelInitializer<Channel>() {
@@ -35,7 +40,7 @@ public class StreamChannel extends BusChannel {
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("write", new WriteHandler(parent));
-                pipeline.addLast("stream", new StreamHandler(parent, streamChannel));
+                pipeline.addLast("stream", new StreamHandler());
                 pipeline.addLast(initializer);
             }
         });
@@ -49,9 +54,9 @@ public class StreamChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("ping", new PingHandler(parent, streamChannel));
                 pipeline.addLast("write", new WriteHandler(parent));
-                pipeline.addLast("stream", new StreamHandler(parent, streamChannel));
+                pipeline.addLast("ping", new PingHandler(parent));
+                pipeline.addLast("stream", new StreamHandler());
             }
         });
         parent.eventLoop().register(streamChannel).sync();
@@ -61,11 +66,9 @@ public class StreamChannel extends BusChannel {
     private static class PingHandler extends ChannelDuplexHandler {
 
         private TunnelChannel parent;
-        private StreamChannel streamChannel;
 
-        public PingHandler(TunnelChannel parent, StreamChannel streamChannel) {
+        public PingHandler(TunnelChannel parent) {
             this.parent = parent;
-            this.streamChannel = streamChannel;
         }
 
         @Override
@@ -73,7 +76,7 @@ public class StreamChannel extends BusChannel {
             ChannelPromise channelPromise = ctx.newPromise();
             Channel channel = ctx.channel();
             AtomicReference<InetSocketAddress> remoteAddressRef = new AtomicReference<>((InetSocketAddress) remoteAddress);
-            ctx.pipeline().addAfter("ping", "pong", new PongHandler(parent, remoteAddressRef, channelPromise));
+            ctx.pipeline().addAfter("ping", "pong", new PongHandler(remoteAddressRef, channelPromise));
             AtomicReference<Integer> delayRef = new AtomicReference<>(100);
             new Runnable() {
                 @Override
@@ -112,7 +115,7 @@ public class StreamChannel extends BusChannel {
                     .message(message)
                     .build();
             logger.debug("sendPing: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
-            parent.writeAndFlush(envelope);
+            ctx.writeAndFlush(envelope);
         }
 
         private void writeRelayPunching(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
@@ -137,18 +140,16 @@ public class StreamChannel extends BusChannel {
                     .message(message)
                     .build();
             logger.debug("relayPunching: {}:{}", tunnelAddress.getHostString(), tunnelAddress.getPort());
-            parent.writeAndFlush(envelope);
+            ctx.writeAndFlush(envelope);
         }
     }
 
     private static class PongHandler extends ChannelInboundHandlerAdapter {
 
-        private TunnelChannel parent;
         private AtomicReference<InetSocketAddress> remoteAddressRef;
         private ChannelPromise promise;
 
-        public PongHandler(TunnelChannel parent, AtomicReference<InetSocketAddress> remoteAddressRef, ChannelPromise promise) {
-            this.parent = parent;
+        public PongHandler(AtomicReference<InetSocketAddress> remoteAddressRef, ChannelPromise promise) {
             this.remoteAddressRef = remoteAddressRef;
             this.promise = promise;
         }
@@ -197,14 +198,6 @@ public class StreamChannel extends BusChannel {
 
     private static class StreamHandler extends ChannelDuplexHandler {
 
-        private TunnelChannel parent;
-        private StreamChannel streamChannel;
-
-        public StreamHandler(TunnelChannel parent, StreamChannel streamChannel) {
-            this.parent = parent;
-            this.streamChannel = streamChannel;
-        }
-
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
@@ -222,7 +215,7 @@ public class StreamChannel extends BusChannel {
                             .recipient(envelope.sender())
                             .message(message)
                             .build();
-                    parent.writeAndFlush(data);
+                    ctx.writeAndFlush(data);
                     break;
                 }
                 case PunchingProtos.MsgType.Data_VALUE: {
