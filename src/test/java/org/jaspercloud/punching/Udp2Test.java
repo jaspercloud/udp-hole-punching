@@ -46,7 +46,7 @@ public class Udp2Test {
         StreamChannel streamChannel = StreamChannel.createClient(tunnelChannel);
         streamChannelManager.addStreamChannel(streamChannel);
 
-        PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test");
+        PunchingProtos.NodeData nodeData = tunnelChannel.queryNode("test1", "test", 3000);
         System.out.println(String.format("nodeData: %s:%s", nodeData.getHost(), nodeData.getPort()));
         streamChannel.connect(new InetSocketAddress(nodeData.getHost(), nodeData.getPort())).sync();
 
@@ -54,7 +54,7 @@ public class Udp2Test {
             int port = 0;
             while (true) {
                 try {
-                    PunchingProtos.NodeData resp = tunnelChannel.queryNode("test1", "test");
+                    PunchingProtos.NodeData resp = tunnelChannel.queryNode("test1", "test", 3000);
                     if (!Objects.equals(resp.getPort(), port)) {
                         streamChannel.setRemoteAddress(new InetSocketAddress(resp.getHost(), resp.getPort()));
                     }

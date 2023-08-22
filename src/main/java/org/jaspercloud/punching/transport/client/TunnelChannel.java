@@ -86,7 +86,7 @@ public class TunnelChannel extends BusChannel {
         return parent().writeAndFlush(msg);
     }
 
-    public PunchingProtos.NodeData queryNode(String nodeId, String token) throws Exception {
+    public PunchingProtos.NodeData queryNode(String nodeId, String token, long timeout) throws Exception {
         String id = UUID.randomUUID().toString();
         CompletableFuture<PunchingProtos.PunchingMessage> future = new CompletableFuture<>();
         futureMap.put(id, future);
@@ -107,7 +107,7 @@ public class TunnelChannel extends BusChannel {
                     .message(message)
                     .build();
             parent().writeAndFlush(envelope);
-            PunchingProtos.PunchingMessage respMessage = future.get();
+            PunchingProtos.PunchingMessage respMessage = future.get(timeout, TimeUnit.MILLISECONDS);
             PunchingProtos.NodeData respNodeData = PunchingProtos.NodeData.parseFrom(respMessage.getData());
             return respNodeData;
         } finally {
