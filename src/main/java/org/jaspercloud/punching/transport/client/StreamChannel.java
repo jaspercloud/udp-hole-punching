@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class StreamChannel extends BusChannel {
 
-    private static Logger logger = LoggerFactory.getLogger(TunnelChannel.class);
+    private static Logger logger = LoggerFactory.getLogger(StreamChannel.class);
 
     public StreamChannel(Channel parent) {
         super(parent);
