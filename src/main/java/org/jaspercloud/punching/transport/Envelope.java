@@ -10,6 +10,7 @@ public class Envelope<T> {
     private InetSocketAddress sender;
     private InetSocketAddress recipient;
     private T message;
+    private boolean reSend;
 
     public InetSocketAddress sender() {
         return sender;
@@ -23,13 +24,18 @@ public class Envelope<T> {
         return message;
     }
 
+    public boolean reSend() {
+        return reSend;
+    }
+
     public Envelope() {
     }
 
-    public Envelope(InetSocketAddress sender, InetSocketAddress recipient, T message) {
+    public Envelope(InetSocketAddress sender, InetSocketAddress recipient, T message, boolean reSend) {
         this.sender = sender;
         this.recipient = recipient;
         this.message = message;
+        this.reSend = reSend;
     }
 
     public static class Builder<T> {
@@ -37,6 +43,7 @@ public class Envelope<T> {
         private InetSocketAddress sender;
         private InetSocketAddress recipient;
         private T message;
+        private boolean reSend = false;
 
         public Builder<T> sender(InetSocketAddress sender) {
             this.sender = sender;
@@ -53,8 +60,13 @@ public class Envelope<T> {
             return this;
         }
 
+        public Builder<T> reSend(boolean reSend) {
+            this.reSend = reSend;
+            return this;
+        }
+
         public Envelope<T> build() {
-            Envelope<T> envelope = new Envelope<>(sender, recipient, message);
+            Envelope<T> envelope = new Envelope<>(sender, recipient, message, reSend);
             return envelope;
         }
 

@@ -5,6 +5,7 @@ import io.netty.channel.*;
 import org.jaspercloud.punching.proto.PunchingProtos;
 import org.jaspercloud.punching.transport.BusChannel;
 import org.jaspercloud.punching.transport.Envelope;
+import org.jaspercloud.punching.transport.ReWriteHandler;
 import org.jaspercloud.punching.transport.RemoteChannelId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ public class StreamChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("rewrite", new ReWriteHandler(parent));
                 pipeline.addLast("stream", new StreamHandler());
                 pipeline.addLast(initializer);
             }
@@ -54,7 +55,7 @@ public class StreamChannel extends BusChannel {
             @Override
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("write", new WriteHandler(parent));
+                pipeline.addLast("rewrite", new ReWriteHandler(parent));
                 pipeline.addLast("ping", new PingHandler(parent));
                 pipeline.addLast("stream", new StreamHandler());
             }
@@ -179,20 +180,6 @@ public class StreamChannel extends BusChannel {
                     break;
                 }
             }
-        }
-    }
-
-    private static class WriteHandler extends ChannelOutboundHandlerAdapter {
-
-        private TunnelChannel parent;
-
-        public WriteHandler(TunnelChannel parent) {
-            this.parent = parent;
-        }
-
-        @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-            parent.writeAndFlush(msg);
         }
     }
 
