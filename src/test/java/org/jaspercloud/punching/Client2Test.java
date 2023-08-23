@@ -12,7 +12,6 @@ import org.jaspercloud.punching.transport.client.*;
 import org.slf4j.impl.StaticLoggerBinder;
 
 import java.net.InetSocketAddress;
-import java.util.Objects;
 
 public class Client2Test {
 
