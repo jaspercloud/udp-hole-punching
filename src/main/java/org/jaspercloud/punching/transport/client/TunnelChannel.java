@@ -2,10 +2,7 @@ package org.jaspercloud.punching.transport.client;
 
 import io.netty.channel.*;
 import org.jaspercloud.punching.proto.PunchingProtos;
-import org.jaspercloud.punching.transport.BusChannel;
-import org.jaspercloud.punching.transport.Envelope;
-import org.jaspercloud.punching.transport.ReWriteHandler;
-import org.jaspercloud.punching.transport.RemoteChannelId;
+import org.jaspercloud.punching.transport.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +13,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class TunnelChannel extends BusChannel {
 
@@ -61,6 +57,7 @@ public class TunnelChannel extends BusChannel {
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("rewrite", new ReWriteHandler(parent));
+                pipeline.addLast("reSend", new ReSendHandler(20, 3000));
                 pipeline.addLast("tunnel", new TunnelHandler());
                 pipeline.addLast(initializer);
             }
@@ -76,6 +73,7 @@ public class TunnelChannel extends BusChannel {
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("rewrite", new ReWriteHandler(parent));
+                pipeline.addLast("reSend", new ReSendHandler(20, 3000));
                 pipeline.addLast("registerReq", new RegisterReqHandler(tunnelChannel));
                 pipeline.addLast("tunnel", new TunnelHandler());
             }
@@ -164,10 +162,15 @@ public class TunnelChannel extends BusChannel {
 
         @Override
         public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
-            ChannelPromise channelPromise = ctx.newPromise();
             Channel channel = ctx.channel();
+            ChannelPromise channelPromise = ctx.newPromise();
             channel.pipeline().addAfter("registerReq", "registerResp", new RegisterRespHandler(tunnelChannel, channelPromise));
-            AtomicReference<Integer> delayRef = new AtomicReference<>(100);
+            channelPromise.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    ctx.connect(remoteAddress, localAddress, promise);
+                }
+            });
             new Runnable() {
                 @Override
                 public void run() {
@@ -175,18 +178,11 @@ public class TunnelChannel extends BusChannel {
                         sendRegister(ctx, (InetSocketAddress) remoteAddress);
                     } finally {
                         if (channel.isActive()) {
-                            channel.eventLoop().schedule(this, delayRef.get(), TimeUnit.MILLISECONDS);
+                            channel.eventLoop().schedule(this, 5 * 1000, TimeUnit.MILLISECONDS);
                         }
                     }
                 }
             }.run();
-            channelPromise.addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture future) throws Exception {
-                    delayRef.set(5 * 1000);
-                    ctx.connect(remoteAddress, localAddress, promise);
-                }
-            });
         }
 
         private void sendRegister(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
@@ -203,6 +199,7 @@ public class TunnelChannel extends BusChannel {
             Envelope envelope = Envelope.builder()
                     .recipient(remoteAddress)
                     .message(message)
+                    .reSend(true)
                     .build();
             logger.debug("sendRegister: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
             ctx.writeAndFlush(envelope);

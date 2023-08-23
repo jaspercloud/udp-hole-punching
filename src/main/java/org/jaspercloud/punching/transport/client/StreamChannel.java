@@ -3,10 +3,7 @@ package org.jaspercloud.punching.transport.client;
 import com.google.protobuf.ByteString;
 import io.netty.channel.*;
 import org.jaspercloud.punching.proto.PunchingProtos;
-import org.jaspercloud.punching.transport.BusChannel;
-import org.jaspercloud.punching.transport.Envelope;
-import org.jaspercloud.punching.transport.ReWriteHandler;
-import org.jaspercloud.punching.transport.RemoteChannelId;
+import org.jaspercloud.punching.transport.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +38,7 @@ public class StreamChannel extends BusChannel {
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("rewrite", new ReWriteHandler(parent));
+                pipeline.addLast("reSend", new ReSendHandler(20, 3000));
                 pipeline.addLast("stream", new StreamHandler());
                 pipeline.addLast(initializer);
             }
@@ -56,6 +54,7 @@ public class StreamChannel extends BusChannel {
             protected void initChannel(Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("rewrite", new ReWriteHandler(parent));
+                pipeline.addLast("reSend", new ReSendHandler(20, 3000));
                 pipeline.addLast("ping", new PingHandler(parent));
                 pipeline.addLast("stream", new StreamHandler());
             }
@@ -74,11 +73,16 @@ public class StreamChannel extends BusChannel {
 
         @Override
         public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
-            ChannelPromise channelPromise = ctx.newPromise();
-            Channel channel = ctx.channel();
             AtomicReference<InetSocketAddress> remoteAddressRef = new AtomicReference<>((InetSocketAddress) remoteAddress);
+            Channel channel = ctx.channel();
+            ChannelPromise channelPromise = ctx.newPromise();
             ctx.pipeline().addAfter("ping", "pong", new PongHandler(remoteAddressRef, channelPromise));
-            AtomicReference<Integer> delayRef = new AtomicReference<>(100);
+            channelPromise.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    ctx.connect(remoteAddressRef.get(), localAddress, promise);
+                }
+            });
             new Runnable() {
                 @Override
                 public void run() {
@@ -89,18 +93,11 @@ public class StreamChannel extends BusChannel {
                         }
                     } finally {
                         if (channel.isActive()) {
-                            channel.eventLoop().schedule(this, delayRef.get(), TimeUnit.MILLISECONDS);
+                            channel.eventLoop().schedule(this, 5 * 1000, TimeUnit.MILLISECONDS);
                         }
                     }
                 }
             }.run();
-            channelPromise.addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture future) throws Exception {
-                    delayRef.set(5 * 1000);
-                    ctx.connect(remoteAddressRef.get(), localAddress, promise);
-                }
-            });
         }
 
         private void writePing(ChannelHandlerContext ctx, InetSocketAddress remoteAddress) {
@@ -114,6 +111,7 @@ public class StreamChannel extends BusChannel {
             Envelope envelope = Envelope.builder()
                     .recipient(remoteAddress)
                     .message(message)
+                    .reSend(true)
                     .build();
             logger.debug("sendPing: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
             ctx.writeAndFlush(envelope);
@@ -139,6 +137,7 @@ public class StreamChannel extends BusChannel {
             Envelope envelope = Envelope.builder()
                     .recipient(new InetSocketAddress(tunnelAddress.getHostString(), tunnelAddress.getPort()))
                     .message(message)
+                    .reSend(true)
                     .build();
             logger.debug("relayPunching: {}:{}", tunnelAddress.getHostString(), tunnelAddress.getPort());
             ctx.writeAndFlush(envelope);

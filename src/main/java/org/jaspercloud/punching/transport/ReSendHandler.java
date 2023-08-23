@@ -1,9 +1,9 @@
 package org.jaspercloud.punching.transport;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.util.concurrent.ScheduledFuture;
 import org.jaspercloud.punching.proto.PunchingProtos;
 
 import java.util.Iterator;
@@ -14,45 +14,43 @@ import java.util.concurrent.TimeoutException;
 
 public class ReSendHandler extends ChannelDuplexHandler {
 
+    private long retryTime;
     private long timeout;
 
     private Map<String, Packet> map = new ConcurrentHashMap<>();
-    private Runnable writeTask;
-    private ScheduledFuture<?> scheduledFuture;
 
-    public ReSendHandler(long timeout) {
+    public ReSendHandler(long retryTime, long timeout) {
+        this.retryTime = retryTime;
         this.timeout = timeout;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         super.channelActive(ctx);
-        writeTask = () -> {
-            Iterator<Map.Entry<String, Packet>> iterator = map.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<String, Packet> next = iterator.next();
-                Packet packet = next.getValue();
-                boolean timeout = packet.isTimeout(this.timeout);
-                if (timeout) {
-                    ctx.fireExceptionCaught(new TimeoutException("send timeout"));
-                    if (null != scheduledFuture) {
-                        scheduledFuture.cancel(true);
+        Channel channel = ctx.channel();
+        new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Iterator<Map.Entry<String, Packet>> iterator = map.entrySet().iterator();
+                    while (iterator.hasNext()) {
+                        Map.Entry<String, Packet> next = iterator.next();
+                        Packet packet = next.getValue();
+                        boolean isTimeout = packet.isTimeout(timeout);
+                        if (isTimeout) {
+                            ctx.fireExceptionCaught(new TimeoutException(String.format("send timeout: %s", next.getKey())));
+                            ctx.close();
+                            return;
+                        }
+                        ctx.writeAndFlush(packet.getEnvelope());
                     }
-                    ctx.close();
-                    return;
+                } finally {
+                    if (channel.isActive()) {
+                        ctx.executor().schedule(this, retryTime, TimeUnit.MILLISECONDS);
+                    }
                 }
-                ctx.writeAndFlush(packet.getEnvelope());
             }
-        };
-        scheduledFuture = ctx.executor().scheduleAtFixedRate(writeTask, 0, 100, TimeUnit.MILLISECONDS);
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        super.channelInactive(ctx);
-        if (null != scheduledFuture) {
-            scheduledFuture.cancel(true);
-        }
+        }.run();
     }
 
     @Override
@@ -67,7 +65,7 @@ public class ReSendHandler extends ChannelDuplexHandler {
         Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
         if (envelope.reSend()) {
             map.put(envelope.message().getReqId(), new Packet(envelope));
-            writeTask.run();
+            ctx.writeAndFlush(msg);
         } else {
             ctx.writeAndFlush(msg);
         }
