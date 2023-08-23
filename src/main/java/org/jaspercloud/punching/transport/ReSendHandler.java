@@ -65,10 +65,8 @@ public class ReSendHandler extends ChannelDuplexHandler {
         Envelope<PunchingProtos.PunchingMessage> envelope = (Envelope<PunchingProtos.PunchingMessage>) msg;
         if (envelope.reSend()) {
             map.put(envelope.message().getReqId(), new Packet(envelope));
-            ctx.writeAndFlush(msg);
-        } else {
-            ctx.writeAndFlush(msg);
         }
+        ctx.writeAndFlush(msg);
     }
 
     private static class Packet {

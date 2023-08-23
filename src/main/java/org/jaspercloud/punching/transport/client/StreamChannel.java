@@ -74,12 +74,14 @@ public class StreamChannel extends BusChannel {
         @Override
         public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
             AtomicReference<InetSocketAddress> remoteAddressRef = new AtomicReference<>((InetSocketAddress) remoteAddress);
+            AtomicReference<Long> delayTimeRef = new AtomicReference<>(20L);
             Channel channel = ctx.channel();
             ChannelPromise channelPromise = ctx.newPromise();
             ctx.pipeline().addAfter("ping", "pong", new PongHandler(remoteAddressRef, channelPromise));
             channelPromise.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
+                    delayTimeRef.set(5 * 1000L);
                     ctx.connect(remoteAddressRef.get(), localAddress, promise);
                 }
             });
@@ -93,7 +95,7 @@ public class StreamChannel extends BusChannel {
                         }
                     } finally {
                         if (channel.isActive()) {
-                            channel.eventLoop().schedule(this, 5 * 1000, TimeUnit.MILLISECONDS);
+                            channel.eventLoop().schedule(this, delayTimeRef.get(), TimeUnit.MILLISECONDS);
                         }
                     }
                 }
@@ -111,7 +113,6 @@ public class StreamChannel extends BusChannel {
             Envelope envelope = Envelope.builder()
                     .recipient(remoteAddress)
                     .message(message)
-                    .reSend(true)
                     .build();
             logger.debug("sendPing: {}:{}", remoteAddress.getHostString(), remoteAddress.getPort());
             ctx.writeAndFlush(envelope);
